@@ -1,67 +1,38 @@
 # solareyes
 
-Small rechargeable keychain that plays animated eyes on a 0.96" OLED and charges from a solar panel. Version 0.1 is a bench MVP: expressive eyes, a LiPo, onboard solar charging, and no Wi-Fi, Bluetooth, app, or account.
+<table>
+  <tr>
+    <td><img src="images/solar-eyes-front.jpg" width="280" height="280" alt="Solar Eyes keychain lying on a mat, two blue eyes on the OLED"></td>
+    <td><img src="images/solar-eyes-on-keys.jpg" width="280" height="280" alt="Solar Eyes hanging on a key ring"></td>
+    <td><img src="images/solar-eyes-side.jpg" width="280" height="280" alt="Side view of the perfboard sandwich with the battery inside"></td>
+  </tr>
+</table>
 
-The face is about 70 x 70 mm because the solar panel sets the size. This is a badge-style keychain, larger than the OLED by itself.
+Solar Eyes is a small rechargeable keychain that plays animated eyes on a 0.96" OLED. It charges from a solar panel on its back. There is no Wi-Fi, Bluetooth, app, or account.
+
+The whole thing is a sandwich of two small perfboards. The front board carries the OLED and the ESP32-C3 SuperMini. The back board carries the solar charger, the 5 V regulator, and the power switch. The LiPo sits between them, and the solar panel is taped onto the outside of the back board.
 
 ## Project Status
 
-Version 0.1 is in progress and is being wired on the bench. The ESP32-C3 SuperMini and perfboard are already on hand. Pack prices that are still unknown are left blank below.
+Version 0.1 is built and running on a keychain. It boots from the battery, blinks on its own, looks around, and charges from the panel.
 
-This version is a maker-video MVP. It is meant to boot, show a few eye expressions, blink on its own, run from the battery, and fit in a printed shell.
+This is a proof-of-concept maker build. It has no printed enclosure. The perfboards and the panel are the case.
 
 ## System Overview
 
-A solar panel feeds a CN3065 charger, which charges a 250 mAh LiPo. The charger SYS pin follows the cell voltage and feeds a 5 V boost converter through a switch. The converter powers the ESP32-C3 SuperMini on its 5 V pin. The SuperMini's 3.3 V rail powers the OLED. The display is a 128 x 64 I2C panel on SDA GPIO6 and SCL GPIO7.
+The solar panel feeds a CN3065 charger, which charges a 250 mAh LiPo. The charger's SYS output follows the cell voltage, about 3.0 V to 4.2 V. A CANADUINO buck/boost converter turns that into a steady 5 V. A switch sits between the converter and the SuperMini's 5 V pin. The SuperMini's 3.3 V pin powers the OLED, and the display talks to it over I2C on GPIO6 and GPIO7.
 
-Firmware is a small Arduino sketch. It draws eyes with U8g2 and steps through idle, blink, glance, surprised, and sleepy using `millis()`. Nothing on the board joins a network.
-
-## Wiring
-
-SYS OUT follows the LiPo voltage, about 3.0 V to 4.2 V while the cell is in normal use. The CANADUINO module is what makes the regulated 5 V rail. The OLED is powered from the SuperMini 3.3 V pin.
+The firmware is one Arduino sketch. It draws two rounded rectangles for eyes and moves them around with `millis()` timing.
 
 ```mermaid
-flowchart TD
-    PANEL["MECCANIXITY solar panel<br/>5.5 V, 0.55 W"]
-    CN["CN3065 charger<br/>SYS OUT follows the cell"]
-    CELL["EEMB LP502030<br/>3.7 V, 250 mAh"]
-    SW["Mini power switch"]
-    BOOST["CANADUINO converter<br/>5 V out"]
-    MCU["ESP32-C3 SuperMini"]
-    OLED["0.96 in OLED<br/>128 x 64 I2C"]
-
-    PANEL -->|"SOLAR + and SOLAR -"| CN
-    CELL -->|"BATT + and BATT -"| CN
-    CN -->|"SYS OUT +"| SW
-    SW -->|"VIN +"| BOOST
-    CN -->|"SYS OUT -"| BOOST
-    BOOST -->|"5 V and GND"| MCU
-    MCU -->|"3V3 and GND"| OLED
-    MCU -->|"GPIO6 SDA"| OLED
-    MCU -->|"GPIO7 SCL"| OLED
+flowchart LR
+    PANEL["Solar panel"] --> CN["CN3065 solar charger"]
+    CELL["250 mAh LiPo"] <--> CN
+    CN -->|"SYS OUT, 3.0-4.2 V"| REG["CANADUINO 5 V converter"]
+    REG -->|"5 V"| SW["Power switch"]
+    SW -->|"5 V"| MCU["ESP32-C3 SuperMini"]
+    MCU -->|"3.3 V and I2C"| OLED["0.96 in OLED"]
 ```
-
-### Point-to-point
-
-| From | To | Connection notes |
-|---|---|---|
-| Solar panel + / - | CN3065 SOLAR + / - | Charging input. Measure panel open-circuit voltage in full sun before connecting, and confirm it is inside the charger board's input rating. |
-| LiPo + / - | CN3065 BATT + / - | Check JST polarity against the board silk and the cell's red lead before mating the plug. |
-| CN3065 SYS OUT + | Switch, then converter VIN + | Switch is in series with SYS OUT + only, so the cell can still charge while the gadget is off. |
-| CN3065 SYS OUT - | Converter GND | Battery return. |
-| Converter 5 V / GND | ESP32-C3 5 V / GND | Meter the converter first. Connect the SuperMini only after the output is a steady 5.0 V unloaded and with a small load. |
-| ESP32-C3 3V3 / GND | OLED VCC / GND | Display power comes from the SuperMini 3.3 V rail. |
-| ESP32-C3 GPIO6 | OLED SDA | I2C data. The sketch calls `Wire.begin(6, 7)`. |
-| ESP32-C3 GPIO7 | OLED SCL | I2C clock. |
-
-GPIO6 and GPIO7 are the pins for this build. They are not a universal default across ESP32-C3 board definitions.
-
-### Before you apply power
-
-1. Meter the solar panel open-circuit voltage in full sun. A panel sold as 5.5 V can sit higher than its label with no load.
-2. Confirm battery polarity and that the pouch is not creased, punctured, or pinched. Read the charge-current resistor on the CN3065 and keep USB charge current near 0.5C for this cell, about 125 mA. A charger module can be set much higher than the panel's 100 mA.
-3. Power the 5 V converter from SYS OUT and confirm 5.0 V before the SuperMini is attached.
-4. Leave the SuperMini USB-C cable unplugged whenever the converter is connected to the 5 V pin. Those two sources share that rail. Use USB only while the converter output is disconnected, for the first OLED bring-up.
 
 ## Bill of Materials
 
@@ -69,73 +40,231 @@ Prices are CAD, per pack or listing. A multi-pack is priced as one purchase, not
 
 | Item | Notes | Qty | Price / pack |
 |---|---|---:|---|
-| 0.96" yellow/blue OLED | 128 x 64, I2C. Confirm SSD1306 or SH1106 before choosing the U8g2 constructor. | 1 | `C$ _____` |
-| ESP32-C3 SuperMini | 3.3 V dev board. | 1 | Owned |
-| CN3065 solar charger | Solar LiPo charge module, Micro-USB. | 1 | `C$ _____` |
-| EEMB LP502030 LiPo | 3.7 V, 250 mAh, about 20.5 x 32 x 5.3 mm. | 1 | `C$ _____` |
-| MECCANIXITY solar panel | 5.5 V, 0.55 W, 100 mA, about 70 x 70 mm. | 1 | `C$ _____` |
-| CANADUINO 5 V converter | 3-15 V in, 5 V at up to 600 mA. Sold as a 3-pack. | 1 | C$12.89 |
-| Perfboard / protoboard | Main electronics carrier. | 1 | Owned |
-| Pre-formed jumper wire kit | Cut and solder on the perfboard. | As needed | `C$ _____` |
-| 3D-printed enclosure | Front bezel, rear shell, access cutouts. | 1 set | `C$ _____` |
-| Standoffs, insulation, fasteners | Mount the OLED and perfboard. Keep the pouch insulated. | As needed | `C$ _____` |
-| Mini on/off switch | Recommended. Placed in series with SYS OUT +. | 1 | `C$ _____` |
+| 0.96" yellow/blue OLED | 128 x 64, I2C, SSD1306 at address `0x3C` | 1 | `C$ _____` |
+| ESP32-C3 SuperMini | 3.3 V dev board with USB-C | 1 | Owned |
+| CN3065 solar charger | Solar LiPo charge module, Micro-USB | 1 | `C$ _____` |
+| EEMB LP502030 LiPo | 3.7 V, 250 mAh, about 20.5 x 32 x 5.3 mm | 1 | `C$ _____` |
+| MECCANIXITY solar panel | 5.5 V, 0.55 W, 100 mA | 1 | `C$ _____` |
+| CANADUINO 5 V converter | Automatic buck/boost, 3-15 V in, 5 V at up to 600 mA. Sold as a 3-pack. | 1 | C$12.89 |
+| Perfboard | Cut into two pieces, about 50 x 25 mm each | 2 pieces | Owned |
+| 2.54 mm single-row male header | 10-pin strips, used as spacers between the boards | 2 strips | `C$ _____` |
+| 3-pin mini slide switch | On/off for the 5 V line | 1 | `C$ _____` |
+| Pre-formed jumper wire kit | Cut and solder on the perfboard | As needed | `C$ _____` |
+| Double-sided tape | Mounts the charger and the solar panel | As needed | `C$ _____` |
+| Electrical tape | Insulates the charger from the panel | As needed | `C$ _____` |
+| Key ring / carabiner | For the keychain | 1 | `C$ _____` |
 
-**Cost to complete.** Amazon order total: `C$ __________`. Additional hardware / print cost: `C$ __________`.
+**Cost to complete.** Amazon order total: `C$ __________`. Additional hardware cost: `C$ __________`.
 
 ## Required Tools
 
 | Tool | Purpose |
 |---|---|
-| Soldering iron | Perfboard joints for power and I2C |
-| Multimeter | Panel open-circuit voltage, polarity, and the 5.0 V rail |
-| Wire stripper / cutter | Jumper leads |
-| 3D printer | Bezel and rear shell, after a dry-fit |
-| Arduino IDE | Build and upload `solar_eyes_v0_1.ino` |
+| Soldering iron and solder | All perfboard joints |
+| Rosin flux | Getting solder to wet the SuperMini and header pins |
+| Isopropyl alcohol (90%+) and a toothbrush | Cleaning flux off so pins do not leak current into each other |
+| Multimeter | Polarity, the 5.0 V rail, and checking for shorts |
+| Flush cutters / hobby knife | Cutting the perfboard and header strips |
+| Wire stripper | Jumper leads |
+| Arduino IDE or PlatformIO | Uploading `solar_eyes_v0_1.ino` |
 
-## Build and Verification Order
+## Board Layout
 
-1. Run the ESP32-C3 and OLED from USB only. Confirm I2C, orientation, and the eye cycle. Keep the 5 V converter disconnected during this step.
-2. Measure the solar panel open-circuit voltage in full sun and compare it with the CN3065 board's input rating.
-3. Check charger wiring, battery polarity, and the charge-current setting for the 250 mAh cell.
-4. Power the 5 V converter from the SYS rail. Confirm a stable 5.0 V with no SuperMini attached, then again with a representative load.
-5. Move the circuit onto perfboard, run it from the battery, dry-fit the stack, print the enclosure, then film the assembly and the final reveal.
+Both perfboards are the same size, about 50 x 25 mm. In this build, "top" means the end where the OLED is.
 
-## Mechanical Assembly
+**Board A, front (outer face).** The OLED and the SuperMini both face outward. The SuperMini's USB-C port sticks out past the side edge so a cable can still plug in.
 
-The package is a stack: OLED and bezel on the front, perfboard in the middle, LiPo on an insulated pad, solar panel in the rear shell.
+```text
++-------------------------+
+|  +-------------------+  |
+|  |                   |  |
+|  |    0.96" OLED     |  |   top half
+|  |                   |  |
+|  +-------------------+  |
+|  +-------------------+  |
+|  |                   +-----+
+|  |  ESP32-C3         | USB-C   <- sticks out the side
+|  |  SuperMini        +-----+
+|  +-------------------+  |   bottom half
++-------------------------+
+```
 
-Thickness, wire routing, solar lead dress, and USB reach still need a physical dry-fit before the shell is treated as final.
+**Board A, back.** All of the OLED-to-SuperMini wiring is done on this side. The LiPo sits behind the screen area, and the display wires wrap over it to hold it down.
 
-### 1. Front face
+```text
++-------------------------+
+| ::::::::: header :::::: |   10-pin spacer strip
+|  +-------------------+  |
+|  |      LiPo         |  |   behind the OLED
+|  |  (wires wrap over)|  |
+|  +-------------------+  |
+|   ~~~ I2C + power ~~~   |   neat point-to-point wiring
+|   ~~~ wiring routed ~~  |
+| ::::::::: header :::::: |   10-pin spacer strip
++-------------------------+
+```
 
-Print a bezel that frames the OLED and covers the glass edges. Leave the active 128 x 64 area open. The yellow/blue split is in the glass, so rotating the module in the bezel also rotates which band is yellow.
+**Board B, outer face.** This board is only power electronics. The regulator goes at the top, behind the OLED. The switch goes in any free corner; this build uses the top right. The CN3065 is taped down with its Micro-USB port facing down.
 
-### 2. Perfboard
+```text
++-------------------------+
+|  [5V REG]          [SW] |   top, behind the OLED
+|                         |
+|  +-------------------+  |
+|  |                   |  |
+|  |  CN3065 charger   |  |
+|  |                   |  |
+|  +-------[uUSB]------+  |   Micro-USB facing down
++-------------------------+
+```
 
-Solder the ESP32-C3, CN3065, 5 V converter, and signal wiring to the carrier. Keep the SuperMini antenna area clear of copper pours and the battery pouch.
+**Side view of the stack**, from the face you look at to the back of the keychain:
 
-### 3. Battery
+```mermaid
+flowchart LR
+    A["OLED + SuperMini<br/>front of Board A"] --> B["Board A<br/>wiring on back"]
+    B --> C["LiPo + header spacers<br/>sandwiched"]
+    C --> D["Board B"]
+    D --> E["CN3065, regulator, switch<br/>on outer face"]
+    E --> F["Electrical tape<br/>+ double-sided tape"]
+    F --> G["Solar panel"]
+```
 
-Seat the LiPo on an insulated support with small spacers. Do not bend, puncture, or compress the pouch. Route its leads so the rear shell cannot pinch them.
+## Wiring
 
-### 4. Rear shell
+```mermaid
+flowchart TD
+    PANEL["Solar panel"]
+    CN["CN3065 charger"]
+    CELL["LiPo 250 mAh"]
+    REG["CANADUINO 5 V converter<br/>EN tied to VIN"]
+    SW["3-pin slide switch"]
+    MCU["ESP32-C3 SuperMini"]
+    OLED["0.96 in OLED"]
 
-Expose the solar panel through a rear cutout with support around the perimeter. Dress the panel leads so they can be unplugged for service.
+    PANEL -->|"+ and - soldered to solar input"| CN
+    CELL -->|"+ and - soldered to BAT pads"| CN
+    CN -->|"SYS OUT +"| REG
+    CN -->|"SYS OUT -"| REG
+    REG -->|"5 V out"| SW
+    SW -->|"5 V"| MCU
+    REG -->|"GND"| MCU
+    MCU -->|"3V3 to VCC, GND to GND"| OLED
+    MCU -->|"GPIO6 to SDA"| OLED
+    MCU -->|"GPIO7 to SCL"| OLED
+```
 
-### 5. Access
+| From | To | Notes |
+|---|---|---|
+| ESP32-C3 3V3 / GND | OLED VCC / GND | Display power comes from the SuperMini's 3.3 V pin. |
+| ESP32-C3 GPIO6 | OLED SDA | I2C data |
+| ESP32-C3 GPIO7 | OLED SCL | I2C clock |
+| Solar panel + / - | CN3065 solar input + / - | Cut the JST plug off and solder the leads straight to the board. |
+| LiPo + / - | CN3065 BAT + / - | Cut the JST plug off and solder straight to the board. Do this last: ground first, then positive. |
+| CN3065 SYS OUT + / - | Converter VIN / GND | Battery-voltage rail into the converter. |
+| Converter EN | Converter VIN | **Required.** Solder EN to VIN or the converter puts out 0 V. |
+| Converter 5 V | Switch, then ESP32-C3 5 V | The switch can go in the 5 V line or the GND line. This build switches 5 V. |
+| Converter GND | ESP32-C3 GND | Common ground. |
 
-The power switch should be reachable from outside the shell. Plan a USB-C opening for firmware updates, and use it only when the converter is not back-feeding the 5 V pin.
+GPIO6 and GPIO7 are the pins chosen for this build. They are not a universal ESP32-C3 default, so the sketch sets them explicitly.
 
-### Packaging constraint
+The SuperMini's USB-C port and its 5 V pin feed the same rail. **Flip the switch off before plugging in USB-C** to reflash, so the converter and the USB port are never both driving it.
 
-The MECCANIXITY panel is about 70 x 70 mm, so that is the minimum face of the enclosure.
+## Assembly
+
+### 1. Cut the two boards
+
+Cut two pieces of perfboard, about 50 x 25 mm each. Make them the same size so they line up when stacked. Call them Board A (display side) and Board B (power side).
+
+### 2. Mount the OLED and SuperMini on Board A
+
+Put the OLED on the top half of Board A and the ESP32-C3 SuperMini on the bottom half. Both parts face **outward**, on the same side of the board. Let the SuperMini's USB-C port stick out past the side edge so a cable can still reach it.
+
+Solder their pins through from the front.
+
+### 3. Wire Board A from the back
+
+Flip Board A over and do all the wiring on the back:
+
+- OLED VCC to SuperMini 3V3
+- OLED GND to SuperMini GND
+- OLED SDA to SuperMini GPIO6
+- OLED SCL to SuperMini GPIO7
+
+Route the wires carefully and keep them tidy. Leave the display wires long enough to wrap over the battery later; they double as the battery strap.
+
+If the solder balls up instead of sticking, add flux and hold the iron on the pin and the pad together for a couple of seconds before feeding solder in.
+
+### 4. Clean and test Board A
+
+Scrub the flux off with isopropyl alcohol and a toothbrush, then let it dry completely. Leftover flux can leak current between neighboring pins.
+
+Check for solder bridges between pins. Then plug in USB-C, upload the sketch (see [Firmware](#firmware)), and confirm the eyes show up. Fixing a problem is much easier now than after the boards are stacked.
+
+### 5. Add the battery and spacers
+
+Lay the LiPo on the back of Board A, behind the OLED area. Do not bend, puncture, or squeeze the pouch.
+
+Cut 10-pin, 2.54 mm single-row male header strips. These are the same headers the SuperMini uses to plug into a breadboard; here they are just spacers. Ten pins is about 25 mm, the width of the board. Solder one strip along each short edge of Board A so the boards will sit far enough apart for the battery.
+
+Wrap the display wires over the battery so they hold it in place.
+
+### 6. Stack Board B
+
+Put Board B on top of the header pins and line it up with Board A. Solder the four corner pins to Board B. The battery is now sandwiched between the two boards.
+
+### 7. Mount the power parts on Board B
+
+On the outer face of Board B:
+
+1. Stick the CN3065 charger down with double-sided tape, Micro-USB port facing down.
+2. Mount the CANADUINO 5 V converter at the top, behind the OLED. **Solder EN to VIN** on the converter.
+3. Mount the 3-pin slide switch in any free corner. This build uses the top right corner. Use the middle pin and one outer pin.
+
+### 8. Wire the power board
+
+1. Run CN3065 SYS OUT + and - to the converter VIN and GND.
+2. Run the converter 5 V out through the switch to the SuperMini 5 V pin.
+3. Run the converter GND to the SuperMini GND pin.
+4. Cut the JST plug off the solar panel and solder its + and - leads straight to the CN3065 solar input.
+
+### 9. Connect the battery last
+
+Wire the battery last so you are never soldering on a live circuit.
+
+1. Set the switch to off.
+2. Cut the JST plug off the LiPo.
+3. Solder the **ground** lead to CN3065 BAT - first. Leave the positive lead floating and insulated.
+4. Solder the **positive** lead to CN3065 BAT + last.
+5. With the switch still off, meter the converter's 5 V output to ground. It should read about 5.0 V.
+
+### 10. Mount the solar panel
+
+Cover the CN3065 with electrical tape. Put double-sided tape on top of the electrical tape, then stick the solar panel onto it. The electrical tape keeps the panel's back from touching anything on the charger board.
+
+### 11. Switch it on
+
+Flip the switch on. The eyes should come up within a second. Clip it onto your keys.
+
+```mermaid
+flowchart TD
+    S1["Cut two 50 x 25 mm perfboards"] --> S2["Board A front: OLED top, SuperMini bottom"]
+    S2 --> S3["Board A back: wire OLED to SuperMini"]
+    S3 --> S4["Clean flux, flash over USB-C, test"]
+    S4 --> S5["LiPo behind OLED, add header spacers"]
+    S5 --> S6["Stack Board B, solder 4 corners"]
+    S6 --> S7["Board B: CN3065, regulator EN-VIN, switch"]
+    S7 --> S8["Wire power, solder solar leads"]
+    S8 --> S9["Battery last: GND, then +"]
+    S9 --> S10["Tape, then solar panel"]
+    S10 --> S11["Switch on, clip to keys"]
+```
 
 ## Firmware
 
-`solar_eyes_v0_1.ino` is the v0.1 sketch. U8g2 owns the 128 x 64 framebuffer and draws the eyes with ellipses, discs, and lids. That is the whole UI. The same library talks to an SSD1306 or SH1106 over I2C, so there is no separate graphics toolkit in this build.
+`solar_eyes_v0_1.ino` is the whole firmware. U8g2 draws into a 128 x 64 framebuffer in RAM, and the sketch pushes that buffer to the SSD1306 itself over I2C at 100 kHz. This panel did not respond at the library's default 400 kHz.
 
-Arduino IDE settings that match this SuperMini:
+Arduino IDE settings for the SuperMini:
 
 | Setting | Value |
 |---|---|
@@ -147,70 +276,68 @@ Arduino IDE settings that match this SuperMini:
 ```cpp
 #define SDA_PIN 6
 #define SCL_PIN 7
+#define OLED_ADDR 0x3C
 
-// constructor argument order is clock, then data
-U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(
-    U8G2_R0, U8X8_PIN_NONE, SCL_PIN, SDA_PIN);
-
-void setup() {
-    WiFi.mode(WIFI_OFF);
-    Wire.begin(SDA_PIN, SCL_PIN);
-    u8g2.begin();
+void oledInit() {
+  Wire.begin(SDA_PIN, SCL_PIN);
+  Wire.setClock(100000);
+  // ...SSD1306 init sequence, then display on
 }
 ```
 
-If the image is shifted by a couple of columns or looks corrupted, switch the constructor to `U8G2_SH1106_128X64_NONAME_F_HW_I2C`. The sketch cannot set per-pixel color. Pixels in the yellow band of the glass stay yellow, and pixels in the blue band stay blue.
+Each eye is a filled rounded rectangle with no pupil. The eye looks around by changing shape. When the face turns to one side, the near eye gets a little bigger, the far eye a little smaller, and the two slide closer together. Arched eyebrows move with each eye, and the eyes bob slightly while idle. Every change eases in over a few frames instead of snapping.
 
-The animation is a small state machine. Idle, glance, surprised, and sleepy each run for a timed stretch, then a blink plays, then the next expression is chosen.
+The top 16 rows of this panel are yellow glass. The sketch keeps those rows dark, so only blue pixels light up.
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Idle
-    Idle --> Blink
-    Glance --> Blink
-    Surprised --> Blink
-    Sleepy --> Blink
-    Blink --> Idle
-    Blink --> Glance
-    Blink --> Surprised
-    Blink --> Sleepy
+flowchart LR
+    T["Current expression times out"] --> P["Pick the next one at random"]
+    P --> I["Idle"]
+    P --> B["Blink"]
+    P --> L["Look left / right"]
+    P --> U["Look up"]
+    P --> D["Look down"]
+    P --> W["Wink"]
+    P --> Z["Sleepy"]
 ```
 
-The loop redraws about every 33 ms and returns early between frames. Wi-Fi is turned off in `setup()`. BLE is never started.
+The loop redraws about every 33 ms and pauses briefly between frames so the USB connection stays alive. Wi-Fi and BLE are never started.
 
 ### MVP definition of done
 
-- [ ] OLED initializes on GPIO6 / GPIO7
-- [ ] At least three eye expressions
-- [ ] Automatic blinking
-- [ ] Wi-Fi stays off
-- [ ] Stable battery-powered operation
-- [ ] Enclosure assembled
+- [x] OLED initializes on GPIO6 / GPIO7
+- [x] At least three eye expressions
+- [x] Automatic blinking
+- [x] Wi-Fi never started
+- [x] Stable battery-powered operation
+- [x] Perfboard stack assembled
 - [ ] Final video captured
 
 ## Notes and Limitations
 
 - No radio, microphone, cloud, or phone app in this version.
-- Charge current on many CN3065 boards is set high for a 250 mAh pouch. Check it before a long USB charge.
-- The SuperMini 5 V pin and the USB-C port are the same power input on this design. Only one source at a time.
-- Enclosure dimensions are still pending a dry-fit. The 70 mm panel is the known minimum face size.
-- Eye art is drawn with U8g2 primitives so the board can be tested while it is being wired. New expressions stay in that same draw path.
+- The SuperMini's 5 V pin and USB-C port share one rail. Switch off before plugging in USB-C.
+- When the ESP32 reboots, Windows drops and re-adds its USB serial port. Close the serial monitor before uploading.
+- Many CN3065 boards are set to charge faster than a 250 mAh pouch likes. Check the program resistor and aim for about 125 mA.
+- With the switch in the 5 V line, the converter still draws about 0.2 mA from the battery when the keychain is off.
+- The pouch cell has no case around it. Keep it from being pinched or punctured on the key ring.
 
 ## Future Improvements
 
-- Tune blink timing and add expressions in the U8g2 draw path
-- Confirm SSD1306 vs SH1106 on the bought OLED and lock the constructor
-- Fill in the blank pack prices after the Amazon order
-- Add the enclosure STEP or STL after the dry-fit
-- Set the CN3065 program resistor for about 125 mA if the board is above that
-- Film the wiring, the first battery run, and the closed-up badge
+- Film the full build and the reveal
+- Fill in the blank pack prices
+- Add a thin printed bumper around the edges
+- Battery-level reading on an ADC pin
+- Sleep between expressions to stretch battery life
+- More expressions
 
 ## References
 
 - [U8g2](https://github.com/olikraus/u8g2) and the [C++ setup guide](https://github.com/olikraus/u8g2/wiki/u8g2setupcpp)
-- Earlier board bring-up in the same style: [robotictentacle](https://github.com/hronkrobotics/robotictentacle)
-- CN3065 datasheet, EEMB LP502030 cell drawing, and the ESP32-C3 SuperMini pinout on the specific board in hand. Read the silkscreen and those PDFs before applying power. The electrical notes here match the modules selected for v0.1, and the physical board still wins if a label disagrees.
+- [CANADUINO mini buck/boost converter](https://www.amazon.ca/dp/B0BRJVF6VS)
+- Earlier project in the same style: [robotictentacle](https://github.com/hronkrobotics/robotictentacle)
+- CN3065 datasheet, the EEMB LP502030 cell drawing, and the ESP32-C3 SuperMini pinout. Check the silkscreen on your own boards before applying power.
 
 ## Disclaimer
 
-This is a small LiPo project. Check polarity, charge current, and the 5 V rail with a meter before connecting the microcontroller. Do not charge an unprotected or damaged pouch, and do not leave the pack compressed inside the shell.
+This is a small LiPo project. Check polarity and the 5 V rail with a meter before connecting the microcontroller. Do not charge a damaged or swollen pouch, and do not solder on the circuit while the battery's positive lead is connected.
