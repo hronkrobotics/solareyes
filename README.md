@@ -8,13 +8,13 @@
   </tr>
 </table>
 
-Solar Eyes is a small rechargeable keychain that plays animated eyes on a 0.96" OLED. It charges from a solar panel on its back. There is no Wi-Fi, Bluetooth, app, or account.
+Solar Eyes is a small rechargeable keychain that plays animated eyes on a 0.96" OLED. It has a solar panel on its back and a Micro-USB charging port. There is no Wi-Fi, Bluetooth, app, or account.
 
 The whole thing is a sandwich of two small perfboards. The front board carries the OLED and the ESP32-C3 SuperMini. The back board carries the solar charger, the 5 V regulator, and the power switch. The LiPo sits between them, and the solar panel is taped onto the outside of the back board.
 
 ## Project Status
 
-Version 0.1 is built and running on a keychain. It boots from the battery, blinks on its own, looks around, and charges from the panel.
+Version 0.1 is built and running on a keychain. It boots from the battery, blinks on its own, looks around, and recharges over the charger's Micro-USB port. See [Notes and Limitations](#notes-and-limitations) for the state of solar charging.
 
 This is a proof-of-concept maker build. It has no printed enclosure. The perfboards and the panel are the case.
 
@@ -36,25 +36,21 @@ flowchart LR
 
 ## Bill of Materials
 
-Prices are CAD, per pack or listing. A multi-pack is priced as one purchase, not per piece.
+Prices are Amazon.ca listing prices in CAD on October 26, 2026, before tax and shipping. Most of these are multi-packs, so one order leaves spares.
 
-| Item | Notes | Qty | Price / pack |
-|---|---|---:|---|
-| 0.96" yellow/blue OLED | 128 x 64, I2C, SSD1306 at address `0x3C` | 1 | `C$ _____` |
-| ESP32-C3 SuperMini | 3.3 V dev board with USB-C | 1 | Owned |
-| CN3065 solar charger | Solar LiPo charge module, Micro-USB | 1 | `C$ _____` |
-| EEMB LP502030 LiPo | 3.7 V, 250 mAh, about 20.5 x 32 x 5.3 mm | 1 | `C$ _____` |
-| MECCANIXITY solar panel | 5.5 V, 0.55 W, 100 mA | 1 | `C$ _____` |
-| CANADUINO 5 V converter | Automatic buck/boost, 3-15 V in, 5 V at up to 600 mA. Sold as a 3-pack. | 1 | C$12.89 |
-| Perfboard | Cut into two pieces, about 50 x 25 mm each | 2 pieces | Owned |
-| 2.54 mm single-row male header | 10-pin strips, used as spacers between the boards | 2 strips | `C$ _____` |
-| 3-pin mini slide switch | On/off for the 5 V line | 1 | `C$ _____` |
-| Pre-formed jumper wire kit | Cut and solder on the perfboard | As needed | `C$ _____` |
-| Double-sided tape | Mounts the charger and the solar panel | As needed | `C$ _____` |
-| Electrical tape | Insulates the charger from the panel | As needed | `C$ _____` |
-| Key ring / carabiner | For the keychain | 1 | `C$ _____` |
+| Item | Listing | Notes | Used | Price / pack |
+|---|---|---|---:|---:|
+| 0.96" OLED | [ELEGOO 0.96" OLED, 3-pack](https://www.amazon.ca/dp/B0D2RMQQHR) | 128 x 64, I2C, SSD1306 at address `0x3C` | 1 of 3 | C$18.99 |
+| Solar panel | [MECCANIXITY mini solar panel, 5-pack](https://www.amazon.ca/dp/B0BDXBD8WM) | 1.5 V, 60 mA, 0.09 W, 30 x 30 mm | 1 of 5 | C$13.49 |
+| 5 V converter | [CANADUINO mini buck/boost converter, 3-pack](https://www.amazon.ca/dp/B0BRJVF6VS) | 3-15 V in, 5 V at up to 600 mA, EN pin | 1 of 3 | C$6.99 |
+| LiPo battery | [EEMB LP502030 250 mAh](https://www.amazon.ca/dp/B08FD3V6TF) | 3.7 V, 20.5 x 32 x 5.3 mm, built-in protection | 1 | C$16.99 |
+| Solar charger | [CN3065 mini solar LiPo charger, 2-pack](https://www.amazon.ca/dp/B0DYZG2YLS) | 4.4-6 V solar input, Micro-USB, 500 mA charge by default | 1 of 2 | C$12.99 |
+| Perfboard | [ELEGOO double-sided prototype board kit, 32 pieces](https://www.amazon.ca/dp/B072Z7Y19F) | Cut two pieces to about 50 x 25 mm | 2 pieces | C$17.99 |
+| Pin headers | [Glarks 2.54 mm pin header assortment](https://www.amazon.ca/dp/B07CWSXY7P) | 10-pin male strips, used as spacers | 2 strips | C$19.96 |
 
-**Cost to complete.** Amazon order total: `C$ __________`. Additional hardware cost: `C$ __________`.
+**Total for the linked parts:** C$107.40.
+
+Also needed, from parts on hand: an ESP32-C3 SuperMini, a 3-pin mini slide switch, hookup wire, double-sided tape, electrical tape, and a key ring or carabiner.
 
 ## Required Tools
 
@@ -105,6 +101,10 @@ Both perfboards are the same size, about 50 x 25 mm. In this build, "top" means 
 ```
 
 **Board B, outer face.** This board is only power electronics. The regulator goes at the top, behind the OLED. The switch goes in any free corner; this build uses the top right. The CN3065 is taped down with its Micro-USB port facing down.
+
+<img src="images/solar-eyes-power-board.jpg" width="360" height="360" alt="Back of the keychain: solar panel over the CN3065 charger, red buck/boost converter and slide switch at the key ring end">
+
+In the photo the keychain is upside down, with the key ring end at the bottom. The red buck/boost converter and the slide switch sit at the key ring end, behind the OLED. The solar panel covers the CN3065, and the charger's Micro-USB port sticks out at the far end.
 
 ```text
 +-------------------------+
@@ -303,29 +303,23 @@ flowchart LR
 
 The loop redraws about every 33 ms and pauses briefly between frames so the USB connection stays alive. Wi-Fi and BLE are never started.
 
-### MVP definition of done
-
-- [x] OLED initializes on GPIO6 / GPIO7
-- [x] At least three eye expressions
-- [x] Automatic blinking
-- [x] Wi-Fi never started
-- [x] Stable battery-powered operation
-- [x] Perfboard stack assembled
-- [ ] Final video captured
-
 ## Notes and Limitations
 
-- No radio, microphone, cloud, or phone app in this version.
-- The SuperMini's 5 V pin and USB-C port share one rail. Switch off before plugging in USB-C.
-- When the ESP32 reboots, Windows drops and re-adds its USB serial port. Close the serial monitor before uploading.
-- Many CN3065 boards are set to charge faster than a 250 mAh pouch likes. Check the program resistor and aim for about 125 mA.
-- With the switch in the 5 V line, the converter still draws about 0.2 mA from the battery when the keychain is off.
-- The pouch cell has no case around it. Keep it from being pinched or punctured on the key ring.
+Version 0.1 is a proof of concept, and it has known rough edges. Future versions will attempt to resolve these in some capacity.
+
+- **Solar charging is limited.** The panel is rated 1.5 V, and the CN3065 needs at least 4.4 V on its solar input to charge. One cell on its own will not charge the battery. The Micro-USB port on the charger does. Three or four of these cells in series, or a higher-voltage panel, would reach the charger's input range.
+- **Charge current is high for this cell.** The CN3065 board charges at up to 500 mA by default. The EEMB cell's maximum charge current is 250 mA. Changing the charger's program resistor would bring it down to about 125 mA.
+- **No radio features.** There is no Wi-Fi, BLE, microphone, cloud, or phone app.
+- **USB-C and the 5 V pin share one rail.** Switch off before plugging in USB-C to reflash.
+- **The serial port drops on reset.** When the ESP32 reboots, Windows drops and re-adds its USB serial port. Close the serial monitor before uploading.
+- **Small standby drain.** With the switch in the 5 V line, the converter still draws about 0.2 mA from the battery when the keychain is off.
+- **The battery is exposed.** The pouch cell has no case around it. Keep it from being pinched or punctured on the key ring.
 
 ## Future Improvements
 
 - Film the full build and the reveal
-- Fill in the blank pack prices
+- A solar panel setup that reaches the charger's 4.4 V input
+- A lower charge current to match the 250 mAh cell
 - Add a thin printed bumper around the edges
 - Battery-level reading on an ADC pin
 - Sleep between expressions to stretch battery life
