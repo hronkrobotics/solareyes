@@ -8,13 +8,13 @@
   </tr>
 </table>
 
-Solar Eyes is a small rechargeable keychain that plays animated eyes on a 0.96" OLED. It has a solar panel on its back and a Micro-USB charging port. There is no Wi-Fi, Bluetooth, app, or account.
+Solar Eyes is a small rechargeable keychain that plays animated eyes on a 0.96" OLED. It charges from a solar panel on its back, or from the charger's Micro-USB port. There is no Wi-Fi, Bluetooth, app, or account.
 
 The whole thing is a sandwich of two small perfboards. The front board carries the OLED and the ESP32-C3 SuperMini. The back board carries the solar charger, the 5 V regulator, and the power switch. The LiPo sits between them, and the solar panel is taped onto the outside of the back board.
 
 ## Project Status
 
-Version 0.1 is built and running on a keychain. It boots from the battery, blinks on its own, looks around, and recharges over the charger's Micro-USB port. See [Notes and Limitations](#notes-and-limitations) for the state of solar charging.
+Version 0.1 is built and running on a keychain. It boots from the battery, blinks on its own, looks around, and charges from the solar panel. Charging from the panel was confirmed with a multimeter.
 
 This is a proof-of-concept maker build. It has no printed enclosure. The perfboards and the panel are the case.
 
@@ -307,7 +307,7 @@ The loop redraws about every 33 ms and pauses briefly between frames so the USB 
 
 Version 0.1 is a proof of concept, and it has known rough edges. Future versions will attempt to resolve these in some capacity.
 
-- **Solar charging is limited.** The panel is rated 1.5 V, and the CN3065 needs at least 4.4 V on its solar input to charge. One cell on its own will not charge the battery. The Micro-USB port on the charger does. Three or four of these cells in series, or a higher-voltage panel, would reach the charger's input range.
+- **Solar charging is slow.** The 30 x 30 mm panel is small, so charging from light alone takes a long time. The charger's Micro-USB port is much faster.
 - **Charge current is high for this cell.** The CN3065 board charges at up to 500 mA by default. The EEMB cell's maximum charge current is 250 mA. Changing the charger's program resistor would bring it down to about 125 mA.
 - **No radio features.** There is no Wi-Fi, BLE, microphone, cloud, or phone app.
 - **USB-C and the 5 V pin share one rail.** Switch off before plugging in USB-C to reflash.
@@ -318,7 +318,7 @@ Version 0.1 is a proof of concept, and it has known rough edges. Future versions
 ## Future Improvements
 
 - Film the full build and the reveal
-- A solar panel setup that reaches the charger's 4.4 V input
+- A larger solar panel for faster charging
 - A lower charge current to match the 250 mAh cell
 - Add a thin printed bumper around the edges
 - Battery-level reading on an ADC pin
