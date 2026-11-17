@@ -155,22 +155,27 @@ const StepList MOOD_STEPS[MOOD_COUNT] = {
     stepsOf(NORMAL_STEPS), stepsOf(HAPPY_STEPS), stepsOf(SLEEPY_STEPS),
     stepsOf(ANGRY_STEPS), stepsOf(SAD_STEPS)};
 
+// A random number from 0 to n - 1.
+uint32_t randomBelow(uint32_t n) {
+  return (uint32_t)random((long)n);
+}
+
 void startStep(const Step &step, uint32_t now) {
   if (step.expr == Expr::LookSide) {
-    glanceDir = (esp_random() & 1) ? 1 : -1;
+    glanceDir = randomBelow(2) ? 1 : -1;
   } else if (step.expr == Expr::Wink) {
-    winkLeft = esp_random() & 1;
+    winkLeft = randomBelow(2);
   }
   uint32_t ms = step.ms;
   if (step.randomMs) {
-    ms += esp_random() % step.randomMs;
+    ms += randomBelow(step.randomMs);
   }
   enterExpr(step.expr, now, ms);
 }
 
 void advanceExpr(uint32_t now) {
   const StepList &list = MOOD_STEPS[(uint8_t)mood];
-  uint32_t roll = esp_random() % 100;
+  uint32_t roll = randomBelow(100);
   for (uint8_t i = 0; i < list.count; i++) {
     if (roll < list.steps[i].weight) {
       startStep(list.steps[i], now);
@@ -486,10 +491,10 @@ void faceDraw(uint32_t now) {
   int shakeXL = 0;
   int shakeXR = 0;
   if (phase == Phase::Shaken) {
-    shakeXL = (int)(esp_random() % 5) - 2;
-    shakeXR = (int)(esp_random() % 5) - 2;
-    bobL = (int)(esp_random() % 5) - 2;
-    bobR = (int)(esp_random() % 5) - 2;
+    shakeXL = (int)randomBelow(5) - 2;
+    shakeXR = (int)randomBelow(5) - 2;
+    bobL = (int)randomBelow(5) - 2;
+    bobR = (int)randomBelow(5) - 2;
   }
   int xL = LEFT_X + shown.dxL + shakeXL;
   int xR = RIGHT_X + shown.dxR + shakeXR;

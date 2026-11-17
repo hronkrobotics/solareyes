@@ -12,6 +12,7 @@ U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(
 
 uint8_t nextPage = 8;
 bool displayAsleep = false;
+bool displayFound = false;
 
 void oledCmd(uint8_t value) {
   Wire.beginTransmission(OLED_ADDR);
@@ -21,6 +22,8 @@ void oledCmd(uint8_t value) {
 }
 
 void displayBegin() {
+  Wire.beginTransmission(OLED_ADDR);
+  displayFound = Wire.endTransmission() == 0;
   const uint8_t seq[] = {
       0xAE, 0xD5, 0x80, 0xA8, 0x3F, 0xD3, 0x00, 0x40,
       0x8D, 0x14, 0x20, 0x00, 0xA1, 0xC8, 0xDA, 0x12,
