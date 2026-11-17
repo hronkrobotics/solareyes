@@ -1,8 +1,8 @@
 // Solar Eyes v2
 // Animated eyes on a 0.96" SSD1306 OLED, run by a Seeed XIAO ESP32-S3 from a LiPo.
-// Short press: next mood. Shake it for about 3 seconds: it gets dizzy.
-// No button and no movement for SLEEP_AFTER_MS: the eyes close and it goes to deep
-// sleep. The button, or picking it up, wakes it again.
+// Right button: next mood. Left button: previous mood. Shake it for about 3 seconds:
+// it gets dizzy. With no button and no movement for SLEEP_AFTER_MS, the eyes close
+// and it goes to deep sleep. A shake wakes it again, and so does either button.
 
 #include <Wire.h>
 #include "config.h"
@@ -26,6 +26,22 @@ void wake(uint32_t now) {
   faceWake(now);
 }
 
+// A button that is down right now is left out, or it would wake the board straight
+// back up.
+uint64_t wakePins() {
+  uint64_t pins = 0;
+  if (!nextButton.down) {
+    pins |= 1ULL << PIN_BUTTON_NEXT;
+  }
+  if (!prevButton.down) {
+    pins |= 1ULL << PIN_BUTTON_PREV;
+  }
+  if (motionArmWake()) {
+    pins |= 1ULL << PIN_ACCEL_INT;
+  }
+  return pins;
+}
+
 void setup() {
   Serial.begin(115200);
 
@@ -33,11 +49,11 @@ void setup() {
   Wire.setClock(I2C_HZ);
   Wire.setTimeOut(50);
 
+  uint32_t now = millis();
   displayBegin();
-  inputBegin();
+  inputBegin(now);
   hasAccel = motionBegin();
 
-  uint32_t now = millis();
   faceBegin(now, savedMood, wokeFromSleep());
   noteActivity(now);
   nextFrame = now;
@@ -51,15 +67,16 @@ void setup() {
 void loop() {
   uint32_t now = millis();
 
-  if (buttonPressed(now)) {
+  bool next = buttonPressed(nextButton, now);
+  bool prev = buttonPressed(prevButton, now);
+  if (next || prev) {
     if (faceAwake()) {
-      savedMood = faceNextMood(now);
+      savedMood = faceStepMood(now, next ? 1 : -1);
     } else {
       wake(now);
     }
     noteActivity(now);
-  } else if (buttonDown) {
-    // A held button would wake it straight back up, so it counts as activity.
+  } else if (buttonHeld(nextButton, now) || buttonHeld(prevButton, now)) {
     noteActivity(now);
   }
 
@@ -83,7 +100,7 @@ void loop() {
   if (faceAsleep() && !displayAsleep && !displayBusy()) {
     displaySleep();
     if (DEEP_SLEEP) {
-      deepSleep(motionArmWake());
+      deepSleep(wakePins());
     }
   }
 

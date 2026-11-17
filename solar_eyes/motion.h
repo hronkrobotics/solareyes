@@ -5,10 +5,12 @@
 // Shake detection with an LIS3DH accelerometer on the shared I2C bus. An LIS2DH12
 // uses the same registers and works too. Both of its interrupt generators watch
 // high-pass filtered data, so gravity and slow tilting are ignored:
-// - Generator 1 has the low WAKE_MG threshold and drives the INT1 pin. That pin wakes
-//   the board from deep sleep, and while awake any movement counts as activity.
+// - Generator 1 has the low WAKE_MG threshold and drives the INT1 pin low. That pin
+//   wakes the board from deep sleep, and while awake any movement counts as activity.
 // - Generator 2 has the high SHAKE_MG threshold and is only read over I2C.
 // Both are latched, so each reading reports anything that happened since the last one.
+// INT1 is active low so it can share the ext1 wake-up with the buttons, which also
+// pull their pins low.
 // If no accelerometer answers, motion is skipped and only the button wakes the board.
 // To use a different accelerometer, only this file has to change.
 
@@ -25,6 +27,7 @@ constexpr uint8_t CTRL_REG2 = 0x21;
 constexpr uint8_t CTRL_REG3 = 0x22;
 constexpr uint8_t CTRL_REG4 = 0x23;
 constexpr uint8_t CTRL_REG5 = 0x24;
+constexpr uint8_t CTRL_REG6 = 0x25;
 constexpr uint8_t REFERENCE = 0x26;
 constexpr uint8_t INT1_CFG = 0x30;
 constexpr uint8_t INT1_SRC = 0x31;
@@ -98,6 +101,7 @@ bool motionBegin() {
   accelWrite(lis3dh::CTRL_REG3, 0x40);  // generator 1 drives INT1
   accelWrite(lis3dh::CTRL_REG4, 0x10);  // +-4 g
   accelWrite(lis3dh::CTRL_REG5, 0x0A);  // latch both until their source register is read
+  accelWrite(lis3dh::CTRL_REG6, 0x02);  // INT1 active low
   accelWrite(lis3dh::INT1_THS, thresholdSteps(WAKE_MG));
   accelWrite(lis3dh::INT1_DURATION, 0);
   accelWrite(lis3dh::INT2_THS, thresholdSteps(SHAKE_MG));
@@ -132,7 +136,7 @@ Motion motionUpdate(uint32_t now) {
   return motion;
 }
 
-// Clears both latches so INT1 starts low, and reports whether it can wake the board.
+// Clears both latches so INT1 starts high, and reports whether it can wake the board.
 bool motionArmWake() {
   if (!accelAddr) {
     return false;

@@ -526,8 +526,9 @@ void faceBegin(uint32_t now, uint8_t savedMood, bool wokeUp) {
   enterExpr(MOOD_STEPS[(uint8_t)mood].steps[0].expr, now, 1600);
 }
 
-uint8_t faceNextMood(uint32_t now) {
-  mood = (Mood)(((uint8_t)mood + 1) % MOOD_COUNT);
+// step is 1 for the next mood and -1 for the previous one.
+uint8_t faceStepMood(uint32_t now, int step) {
+  mood = (Mood)(((uint8_t)mood + MOOD_COUNT + step) % MOOD_COUNT);
   enterExpr(MOOD_STEPS[(uint8_t)mood].steps[0].expr, now, 1200);
   Serial.printf("mood: %s\n", MOOD_NAMES[(uint8_t)mood]);
   return (uint8_t)mood;

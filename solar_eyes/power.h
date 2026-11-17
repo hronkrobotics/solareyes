@@ -3,8 +3,8 @@
 #include <driver/rtc_io.h>
 #include "config.h"
 
-// The inactivity timer and deep sleep. Waking from deep sleep restarts the sketch from
-// setup(), so nothing here returns once the board is asleep.
+// The inactivity timer and deep sleep. There is no power switch: deep sleep is the off
+// state. Waking restarts the sketch from setup(), so nothing here returns once asleep.
 
 uint32_t lastActivity = 0;
 
@@ -17,30 +17,27 @@ bool idleTooLong(uint32_t now) {
 }
 
 bool wokeFromSleep() {
-  esp_sleep_wakeup_cause_t cause = esp_sleep_get_wakeup_cause();
-  return cause == ESP_SLEEP_WAKEUP_EXT0 || cause == ESP_SLEEP_WAKEUP_EXT1;
+  return esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1;
 }
 
 const char *wakeReason() {
-  switch (esp_sleep_get_wakeup_cause()) {
-    case ESP_SLEEP_WAKEUP_EXT0:
-      return "button";
-    case ESP_SLEEP_WAKEUP_EXT1:
-      return "movement";
-    default:
-      return "power on";
+  if (!wokeFromSleep()) {
+    return "power on";
   }
+  return (esp_sleep_get_ext1_wakeup_status() & (1ULL << PIN_ACCEL_INT)) ? "a shake" : "a button";
 }
 
-// Turn the OLED off first. The button always wakes the board. Movement wakes it too
-// when an accelerometer is fitted, since its INT1 pin stays high once triggered.
-void deepSleep(bool wakeOnMotion) {
-  esp_sleep_enable_ext0_wakeup((gpio_num_t)PIN_BUTTON, 0);
-  // ext0 keeps the RTC domain powered, so this pull-up holds the button high in sleep.
-  rtc_gpio_pullup_en((gpio_num_t)PIN_BUTTON);
-  rtc_gpio_pulldown_dis((gpio_num_t)PIN_BUTTON);
-  if (wakeOnMotion) {
-    esp_sleep_enable_ext1_wakeup(1ULL << PIN_ACCEL_INT, ESP_EXT1_WAKEUP_ANY_HIGH);
+// Turn the OLED off first. Every wake-up pin is active low, so they all share ext1.
+// The buttons rely on their RTC pull-ups, which only work with the RTC domain kept on.
+void deepSleep(uint64_t wakePins) {
+  esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
+  const uint8_t buttons[] = {PIN_BUTTON_NEXT, PIN_BUTTON_PREV};
+  for (uint8_t pin : buttons) {
+    rtc_gpio_pullup_en((gpio_num_t)pin);
+    rtc_gpio_pulldown_dis((gpio_num_t)pin);
+  }
+  if (wakePins) {
+    esp_sleep_enable_ext1_wakeup(wakePins, ESP_EXT1_WAKEUP_ANY_LOW);
   }
   Serial.println("deep sleep");
   Serial.flush();

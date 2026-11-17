@@ -2,17 +2,17 @@
 
 <table>
   <tr>
-    <td><img src="images/solar-eyes-v2-case.png" width="280" height="280" alt="Render of the Solar Eyes v2 case: the OLED window on the front, the USB-C opening on the side, and a key ring loop on top"></td>
+    <td><img src="images/solar-eyes-v2-case.png" width="280" height="280" alt="Render of the Solar Eyes v2 case: the OLED window on the front, the USB-C opening and a button hole on the side, and a key ring loop on top"></td>
     <td><img src="images/solar-eyes-v2-moods.gif" width="280" height="280" alt="The eyes stepping through the five moods, drawn by the firmware"></td>
     <td><img src="images/solar-eyes-v2-dizzy.gif" width="280" height="280" alt="Shaken eyes going wide, turning into spinning spirals, then blinking back to normal"></td>
   </tr>
 </table>
 
-Solar Eyes is a small rechargeable keychain that plays animated eyes on a 0.96" OLED. This is version 2. It charges over USB-C, falls asleep when it sits still, and wakes up when you pick up your keys. Shake it for a few seconds and it gets dizzy. There is no Wi-Fi, Bluetooth, app, or account.
+Solar Eyes is a small rechargeable keychain that plays animated eyes on a 0.96" OLED. This is version 2. It charges over USB-C and has no power switch: it falls asleep when it sits still, and a shake wakes it up. Shake it for a few seconds and it gets dizzy. There is no Wi-Fi, Bluetooth, app, or account.
 
 **Looking for version 1, the one with the solar panel?** It is on the [`v1` branch](https://github.com/hronkrobotics/solareyes/tree/v1). Version 2 dropped the panel and kept the name.
 
-A Seeed Studio XIAO ESP32-S3 Sense runs the same eye animation as v1. It sits on a small custom PCB inside a three-piece 3D-printed case, along with an accelerometer, a button that changes the mood, and a slide switch. The XIAO's built-in charger replaces the solar charger and the 5 V converter from v1.
+A Seeed Studio XIAO ESP32-S3 Sense runs the same eye animation as v1. It sits on a small custom PCB inside a three-piece 3D-printed case, along with an accelerometer and two buttons that step through the moods. The XIAO's built-in charger replaces the solar charger and the 5 V converter from v1.
 
 ## Project Status
 
@@ -22,19 +22,18 @@ There are no build photos yet. The pictures above are a render of the case and t
 
 ## System Overview
 
-The LiPo connects to the XIAO's BAT+ and BAT- pads, with the slide switch in the positive lead. The XIAO charges the battery from USB-C and runs from it the rest of the time. Its 3.3 V pin powers the OLED and the accelerometer, which share one I2C bus on D9 and D10. The button is on D0 and the accelerometer's interrupt is on D1. Either one can wake the XIAO from deep sleep.
+The LiPo connects straight to the XIAO's BAT+ and BAT- pads, and when the keychain is not in use, the XIAO sits in deep sleep. The XIAO charges the battery from USB-C and runs from it the rest of the time. Its 3.3 V pin powers the OLED and the accelerometer, which share one I2C bus on D9 and D10. The buttons are on D0 and D3, and the accelerometer's interrupt is on D1. Any of them can wake the XIAO from deep sleep.
 
 The firmware is one Arduino sketch, split into a few files. The eyes are the same two rounded rectangles as v1, moved around with `millis()` timing.
 
 ```mermaid
 flowchart LR
     USB["USB-C"] --> MCU["XIAO ESP32-S3<br/>built-in charger"]
-    CELL["3.7 V LiPo"] <--> SW["Slide switch"]
-    SW <-->|"BAT+"| MCU
+    CELL["3.7 V LiPo"] <-->|"BAT+ and BAT-"| MCU
     MCU -->|"3.3 V and I2C"| OLED["0.96 in OLED"]
     MCU -->|"3.3 V and I2C"| ACC["LIS3DH accelerometer"]
-    ACC -->|"INT1, wake"| MCU
-    BTN["Button"] -->|"D0, wake"| MCU
+    ACC -->|"INT1, shake to wake"| MCU
+    BTN["Two buttons"] -->|"D0 and D3, wake"| MCU
 ```
 
 ## Bill of Materials
@@ -47,9 +46,8 @@ The final parts are not all ordered yet, so most prices are blank. The OLED is t
 | 0.96" OLED | [ELEGOO 0.96" OLED, 3-pack](https://www.amazon.ca/dp/B0D2RMQQHR) | Same as v1. 128 x 64, I2C, SSD1306 at `0x3C` | 1 of 3 | C$18.99 |
 | Accelerometer | [ST LIS3DH](https://www.st.com/en/mems-and-sensors/lis3dh.html) | 3 x 3 mm, I2C, interrupt output, about 4 uA. Goes on the PCB. Not final. | 1 | |
 | LiPo battery | 3.7 V LiPo with a protection circuit | Small enough to fit behind the PCB | 1 | |
-| Slide switch | Mini slide switch | Cuts the battery's positive lead | 1 | |
-| Tactile button | Momentary tactile button | Its cap pokes out through the 12 mm hole in the bottom piece | 1 | |
-| Custom PCB | Not in the repo yet | Carries the XIAO and the accelerometer, and connects the OLED, button, switch, and battery | 1 | |
+| Buttons | Momentary push buttons | One in each 11.8 mm hole in the side walls | 2 | |
+| Custom PCB | Not in the repo yet | Carries the XIAO and the accelerometer, and connects the OLED, the buttons, and the battery | 1 | |
 
 Also needed, from parts on hand: hookup wire, a key ring, and 3D printer filament.
 
@@ -58,7 +56,7 @@ Also needed, from parts on hand: hookup wire, a key ring, and 3D printer filamen
 | Tool | Purpose |
 |---|---|
 | 3D printer | The top piece, outer wall, and bottom piece |
-| Soldering iron and solder | The XIAO, the OLED header, the button, the switch, and the battery leads |
+| Soldering iron and solder | The XIAO, the OLED header, the buttons, and the battery leads |
 | Rosin flux | Getting solder to wet the XIAO's edge pads and the header pins |
 | Isopropyl alcohol (90%+) and a toothbrush | Cleaning flux off so pins do not leak current into each other |
 | Multimeter | Battery polarity and checking for shorts |
@@ -69,49 +67,40 @@ Also needed, from parts on hand: hookup wire, a key ring, and 3D printer filamen
 
 [`3d/`](3d) has the three printed parts as STEP files, in millimeters. Most slicers, including Bambu Studio, OrcaSlicer, and PrusaSlicer, open STEP files directly.
 
-<img src="images/solar-eyes-v2-parts.png" width="420" alt="Exploded render of the case: the bottom piece with the button hole, the outer wall with the USB-C opening and key ring loop, and the top piece with the OLED window">
+<img src="images/solar-eyes-v2-parts.png" width="420" alt="Exploded render of the case: the plain bottom piece, the outer wall with the USB-C opening, a button hole in each side, and the key ring loop, and the top piece with the OLED window">
 
 | File | Part |
 |---|---|
-| [`solar-eyes-top.step`](3d/solar-eyes-top.step) | Top piece. Holds the OLED so the screen sits flush with the front face. The OLED module's four mounting holes line up with four points on the back, 23.5 mm apart. |
-| [`solar-eyes-wall.step`](3d/solar-eyes-wall.step) | Outer wall. Joins the top and bottom pieces. It has the USB-C opening on the left side and the key ring loop on top. |
-| [`solar-eyes-bottom.step`](3d/solar-eyes-bottom.step) | Bottom piece. Holds the tactile button, which pokes out through a 12 mm hole. |
+| [`solar-eyes-top.step`](3d/solar-eyes-top.step) | Top piece. Holds the OLED so the screen sits flush with the front face. Four pins on the back, 23.5 mm apart, go through the OLED module's mounting holes. |
+| [`solar-eyes-wall.step`](3d/solar-eyes-wall.step) | Outer wall. Joins the top and bottom pieces. It has the USB-C opening on the left side, an 11.8 mm button hole in each side wall, and the key ring loop on top. |
+| [`solar-eyes-bottom.step`](3d/solar-eyes-bottom.step) | Bottom piece. A plain back cover. |
 
-Put together, the case is 42 x 40 x 30.5 mm, plus the key ring loop. The three parts line up on four corner holes.
+Put together, the case is 42 x 40 x 24.5 mm, plus the key ring loop. The three parts line up on four corner holes.
 
 ## Board Layout
 
 The PCB is not finished, so there is no fixed layout yet. The case does fix where a few things go. In this build, "left" and "right" are as seen from the front, looking at the screen, with the key ring loop on top.
 
-**Front.** The OLED window is centered on the front face. The XIAO's USB-C port has to face the opening in the left wall. That opening is a short tunnel, so the port sits 11 mm in from the outside of the case, about 24.7 mm up from the bottom edge and 12.4 mm behind the front face.
+**USB-C.** The XIAO's USB-C port has to face the opening in the left wall. That opening is a short tunnel, so the port sits 11 mm in from the outside of the case, about 24.7 mm up from the bottom edge and 14.1 mm behind the front face.
+
+**Buttons.** Each side wall has an 11.8 mm hole for a button, centered 8.8 mm up from the bottom edge and 14.1 mm behind the front face. The right-hand button steps to the next mood and the left-hand one to the previous mood.
+
+**OLED.** The OLED sits behind the window in the top piece, centered on the front face.
 
 ```text
-                key ring loop
-       +------------( o )------------+
-       |                             |
-       |   +---------------------+   |
-       |   |                     |   |
-USB-C ==   |     OLED window     |   |
-       |   |                     |   |
-       |   +---------------------+   |
-       |                             |
-       +-----------------------------+
+                 key ring loop
+        +------------( o )------------+
+        |                             |
+        |   +---------------------+   |
+        |   |                     |   |
+ USB-C ==   |     OLED window     |   |
+        |   |                     |   |
+        |   +---------------------+   |
+ prev  ()                             ()  next
+        +-----------------------------+
 ```
 
-**Back.** The button pokes out through the 12 mm hole in the bottom piece, centered left to right, with its center 9 mm up from the bottom edge. Seen from the back, the USB-C opening is on the right.
-
-```text
-       +------------( o )------------+
-       |                             |
-       |                             |
-       |                             == USB-C
-       |                             |
-       |            (   )            |   12 mm button hole
-       |                             |
-       +-----------------------------+
-```
-
-**Inside.** The inside of the case is about 38 x 36 mm, with a post in each corner, and about 22 mm deep between the top and bottom pieces.
+**Inside.** The inside of the case is about 38 x 36 mm, with a post in each corner, and about 19 mm deep between the top and bottom pieces.
 
 **Side view of the stack**, from the face you look at to the back of the keychain:
 
@@ -120,7 +109,7 @@ flowchart LR
     A["Top piece<br/>OLED window"] --> B["OLED module"]
     B --> C["Custom PCB<br/>XIAO and LIS3DH"]
     C --> D["LiPo"]
-    D --> E["Bottom piece<br/>button"]
+    D --> E["Bottom piece<br/>back cover"]
 ```
 
 ## Wiring
@@ -128,22 +117,23 @@ flowchart LR
 ```mermaid
 flowchart TD
     CELL["3.7 V LiPo"]
-    SW["Slide switch"]
     MCU["XIAO ESP32-S3"]
     OLED["0.96 in OLED"]
     ACC["LIS3DH"]
-    BTN["Momentary button"]
+    NEXT["Right button<br/>next mood"]
+    PREV["Left button<br/>previous mood"]
     GND["GND"]
 
-    CELL -->|"+"| SW
-    SW -->|"BAT+ pad"| MCU
+    CELL -->|"+ to BAT+ pad"| MCU
     CELL -->|"- to BAT- pad"| MCU
     MCU -->|"3V3 to VCC, GND to GND"| OLED
     MCU -->|"D9 to SDA, D10 to SCL"| OLED
     MCU -->|"3V3, GND, D9, D10"| ACC
     ACC -->|"INT1 to D1"| MCU
-    BTN -->|"D0"| MCU
-    BTN --> GND
+    NEXT -->|"D0"| MCU
+    PREV -->|"D3"| MCU
+    NEXT --> GND
+    PREV --> GND
 ```
 
 | From | To | Notes |
@@ -153,14 +143,13 @@ flowchart TD
 | XIAO D10 (GPIO9) | OLED SCL | I2C clock, shared with the accelerometer |
 | XIAO 3V3 / GND | LIS3DH VDD and VDD_IO / GND | Add the decoupling capacitors from the datasheet. |
 | XIAO D9 / D10 | LIS3DH SDA / SCL | Same bus as the OLED. Tie CS to 3V3 to select I2C. SDO sets the address, `0x18` or `0x19`; the sketch tries both. |
-| LIS3DH INT1 | XIAO D1 (GPIO2) | Goes high when the keychain moves, which wakes the XIAO. |
-| XIAO D0 (GPIO1) | Momentary button, other leg to GND | Uses the ESP32's internal pull-up. The button also wakes the XIAO. |
-| LiPo + | Slide switch, then XIAO BAT+ | The switch cuts the battery off completely. |
+| LIS3DH INT1 | XIAO D1 (GPIO2) | Goes low when the keychain is shaken, which wakes the XIAO. |
+| XIAO D0 (GPIO1) | Right-hand button, other leg to GND | Next mood. Uses the ESP32's internal pull-up, and also wakes the XIAO. |
+| XIAO D3 (GPIO4) | Left-hand button, other leg to GND | Previous mood. Uses the internal pull-up, and also wakes the XIAO. |
+| LiPo + | XIAO BAT+ | |
 | LiPo - | XIAO BAT- | BAT- is the pad closer to the USB-C port. |
 
-**Why these pins.** D9 and D10 are not the XIAO's default I2C pins, so the sketch sets them explicitly. They sit right next to 3V3 and GND on the edge of the XIAO, which keeps the OLED's four connections short. D0 and D1 are RTC pins, so they can wake the ESP32-S3 from deep sleep. D2 (GPIO3) is a strapping pin, so it is left alone.
-
-**The switch has to be on to charge.** It sits between the battery and the XIAO's charger. With the switch off, USB-C still runs the XIAO, but the battery does not charge.
+**Why these pins.** D9 and D10 are not the XIAO's default I2C pins, so the sketch sets them explicitly. They sit right next to 3V3 and GND on the edge of the XIAO, which keeps the OLED's four connections short. D0, D1, and D3 are RTC pins, so they can wake the ESP32-S3 from deep sleep. D2 (GPIO3) is a strapping pin, so it is left alone.
 
 ## Assembly
 
@@ -174,7 +163,7 @@ The XIAO ESP32-S3 Sense ships with a camera board plugged into the connector on 
 
 ### 3. Assemble the PCB
 
-Solder the XIAO and the accelerometer to the PCB, then the connections for the OLED, the button, the slide switch, and the battery, following the [wiring table](#wiring). Place the XIAO so its USB-C port lines up with the opening in the wall (see [Board Layout](#board-layout)). Do not connect the battery yet.
+Solder the XIAO and the accelerometer to the PCB, then the connections for the OLED, the two buttons, and the battery, following the [wiring table](#wiring). Place the XIAO so its USB-C port lines up with the opening in the wall (see [Board Layout](#board-layout)). Do not connect the battery yet.
 
 The LIS3DH is a 3 x 3 mm chip with its pads underneath, which is hard to solder by hand. Having the PCB maker place it is easier.
 
@@ -184,33 +173,32 @@ If the solder balls up instead of sticking, add flux and hold the iron on the pi
 
 Scrub the flux off with isopropyl alcohol and a toothbrush, then let it dry completely. Check for solder bridges.
 
-Connect the OLED, plug in USB-C, and upload the firmware (see [Firmware](#firmware)). Confirm the eyes show up, and press the button to step through the moods. The serial monitor says whether the accelerometer was found. Fixing a problem is much easier now than after everything is in the case.
+Connect the OLED, plug in USB-C, and upload the firmware (see [Firmware](#firmware)). Confirm the eyes show up, and press both buttons to step through the moods. The serial monitor says whether the accelerometer was found. Fixing a problem is much easier now than after everything is in the case.
 
 ### 5. Fit the OLED
 
-Put the OLED into the top piece with the screen facing out, so the glass sits flush with the front face. Its four mounting holes go over the four points on the back of the top piece.
+Put the OLED into the top piece with the screen facing out, so the glass sits flush with the front face. Its four mounting holes go over the four pins on the back of the top piece.
 
-### 6. Fit the button
+### 6. Fit the buttons
 
-Put the tactile button into the bottom piece so its cap pokes out through the 12 mm hole, and connect it to the PCB.
+Put one button into each side hole of the outer wall, and connect them to the PCB. Seen from the front, the next-mood button goes on the right and the previous-mood button on the left.
 
 ### 7. Connect the battery last
 
-Connect the battery last so you are never soldering on a live circuit.
+Connect the battery last so you are never soldering on a live circuit. There is no power switch, so the XIAO starts as soon as the battery is connected.
 
-1. Set the slide switch to off.
+1. Meter the battery. It should read between 3.7 and 4.2 V.
 2. Find the XIAO's BAT- pad. It is the one closer to the USB-C port.
 3. Connect the battery's negative lead to BAT- first. Leave the positive lead floating and insulated.
-4. Connect the positive lead to the slide switch last.
-5. With the switch still off, meter the battery side of the switch to ground. It should read between 3.7 and 4.2 V.
+4. Connect the positive lead to BAT+ last. The eyes should open within a second.
 
 ### 8. Close the case
 
-Fit the PCB and the battery into the outer wall, with the USB-C port in its opening. Keep the battery clear of sharp solder joints. Put the top and bottom pieces on, lining up the four corner holes.
+Fit the PCB and the battery into the outer wall, with the USB-C port in its opening and the buttons in their holes. Keep the battery clear of sharp solder joints. Put the top and bottom pieces on, lining up the four corner holes.
 
-### 9. Switch it on
+### 9. Shake it awake
 
-Flip the switch on. The eyes should open within a second. Clip it onto your keys.
+After a minute with no movement, the eyes close and it goes to sleep. Give it a shake to wake it up, then clip it onto your keys.
 
 ```mermaid
 flowchart TD
@@ -218,10 +206,10 @@ flowchart TD
     S2 --> S3["Assemble the PCB, USB-C lined up with the wall"]
     S3 --> S4["Clean flux, flash over USB-C, test"]
     S4 --> S5["OLED into the top piece"]
-    S5 --> S6["Button into the bottom piece"]
+    S5 --> S6["Buttons into the side walls"]
     S6 --> S7["Battery last: negative, then positive"]
     S7 --> S8["Close the case"]
-    S8 --> S9["Switch on, clip to keys"]
+    S8 --> S9["Shake it awake, clip to keys"]
 ```
 
 ## Firmware
@@ -234,7 +222,7 @@ The firmware is an Arduino sketch in [`solar_eyes/`](solar_eyes). The eye drawin
 | `config.h` | Pins, the sleep timeout, and the shake and dizzy settings |
 | `display.h` | OLED setup, sending frames, and switching the display off and on |
 | `animations.h` | The eyes, the moods, the dizzy spirals, and falling asleep |
-| `input.h` | Reading and debouncing the button |
+| `input.h` | Reading and debouncing the two buttons |
 | `motion.h` | The accelerometer: movement, shaking, and the wake-up interrupt |
 | `power.h` | The inactivity timer and deep sleep |
 
@@ -250,7 +238,7 @@ Open `solar_eyes/solar_eyes.ino` in the Arduino IDE with these settings:
 | CPU Frequency | 80MHz (WiFi). It draws less current, and 240MHz works too. |
 | Library | U8g2 by oliver |
 
-The USB port disappears while the XIAO is in deep sleep. Press the button to wake it before uploading. If the port still does not show up, hold the XIAO's BOOT button while plugging in the USB-C cable, then upload. While working on the firmware, set `DEEP_SLEEP` to `false` in `config.h`, so only the screen turns off.
+The USB port disappears while the XIAO is in deep sleep. Shake it or press a button to wake it before uploading. If the port still does not show up, hold the XIAO's BOOT button while plugging in the USB-C cable, then upload. While working on the firmware, set `DEEP_SLEEP` to `false` in `config.h`, so only the screen turns off.
 
 ### The eyes
 
@@ -258,7 +246,7 @@ Each eye is a filled rounded rectangle with no pupil. The eye looks around by ch
 
 The top 16 rows of this panel are yellow glass. The sketch keeps those rows dark, so only blue pixels light up.
 
-A short press on the button switches to the next mood. Each mood changes the resting look and which expressions come up. The mood is kept through deep sleep, and goes back to Normal when the switch is turned off.
+The right-hand button steps to the next mood and the left-hand button to the previous one. Each mood changes the resting look and which expressions come up. The mood is kept through deep sleep, and goes back to Normal if the battery is unplugged or the XIAO is reset.
 
 | Mood | Look |
 |---|---|
@@ -272,9 +260,11 @@ A short press on the button switches to the next mood. Each mood changes the res
 
 A hard knock makes the eyes go wide and jitter. Keep shaking it for about 3 seconds and they turn into spinning spirals. They stay dizzy for 4 seconds after the shaking stops, then blink back to the current mood. `SHAKE_MG`, `DIZZY_AFTER_MS`, and `DIZZY_FOR_MS` in `config.h` set how hard and how long.
 
-### Sleep
+### Sleep and shake to wake
 
-After 60 seconds with no button press and no movement (`SLEEP_AFTER_MS`), the eyes get sleepy and close, and the OLED turns off. Then the XIAO goes into deep sleep. Pressing the button wakes it, and so does moving it, through the accelerometer's interrupt pin. It wakes up with its eyes opening. If no accelerometer answers at startup, only the button wakes it.
+There is no power switch, so deep sleep is how the keychain turns off. After 60 seconds with no button press and no movement (`SLEEP_AFTER_MS`), the eyes get sleepy and close, and the OLED turns off. Then the XIAO goes into deep sleep. A shake wakes it, through the accelerometer's interrupt pin, and so does either button. It wakes up with its eyes opening. If no accelerometer answers at startup, only the buttons wake it.
+
+On a key ring, something in a pocket can hold a button down. A button held for more than 10 seconds (`STUCK_BUTTON_MS`) stops keeping the keychain awake, and it is left out of the wake-up pins, so it cannot wake the keychain straight back up.
 
 ```mermaid
 flowchart LR
@@ -284,10 +274,10 @@ flowchart LR
     D -->|"4 s after the shaking stops"| A
     A -->|"60 s with no button or movement"| Z["Eyes close, OLED off"]
     Z --> S["Deep sleep"]
-    S -->|"button or movement"| A
+    S -->|"shake or either button"| A
 ```
 
-A full frame takes about a tenth of a second to send at 100 kHz, so the sketch sends it one page (8 rows) at a time and reads the button in between. Wi-Fi and BLE are never started.
+A full frame takes about a tenth of a second to send at 100 kHz, so the sketch sends it one page (8 rows) at a time and reads the buttons in between. Wi-Fi and BLE are never started.
 
 ### Accelerometer
 
@@ -295,16 +285,16 @@ Neither the XIAO ESP32-S3 nor its Sense camera board has an accelerometer. The c
 
 `motion.h` is written for the ST LIS3DH, on the same I2C bus as the OLED. The chip watches for movement on its own, with gravity filtered out:
 
-- Its first interrupt has a low threshold (`WAKE_MG`) and drives the INT1 pin. That pin wakes the XIAO from deep sleep, and any movement while awake restarts the sleep timer.
+- Its first interrupt has a low threshold (`WAKE_MG`) and pulls the INT1 pin low. That pin wakes the XIAO from deep sleep, and any movement while awake restarts the sleep timer.
 - Its second interrupt has a high threshold (`SHAKE_MG`) and is only read over I2C, to tell a hard shake from normal movement.
 
-It runs at 25 Hz in low-power mode, which draws about 4 uA. The LIS2DH12 is a smaller 2 x 2 mm chip with the same registers, and works without changes. Switching to a different accelerometer only means rewriting `motion.h`.
+INT1 is set to active low so it can share the ESP32-S3's wake-up input with the two buttons, which also pull their pins low. The chip runs at 25 Hz in low-power mode, which draws about 4 uA. The LIS2DH12 is a smaller 2 x 2 mm chip with the same registers, and works without changes. Switching to a different accelerometer only means rewriting `motion.h`.
 
 ## Power Notes
 
 These are estimates from datasheets, not measurements.
 
-- **Charging.** The XIAO charges the LiPo at 50 mA, so a 250 mAh cell takes about 5 hours from empty. The red charge LED on the XIAO blinks while it charges and goes out when the battery is full.
+- **Charging.** The XIAO charges the LiPo at 50 mA, so a 250 mAh cell takes about 5 hours from empty. The battery is always connected, so plugging in USB-C always charges it. The red charge LED on the XIAO blinks while it charges and goes out when the battery is full.
 - **Awake.** Seeed rates the XIAO at about 22 mA from the battery, and the OLED adds a few milliamps for the lit pixels. Setting the CPU to 80 MHz in the board settings saves some of that.
 - **Asleep.** Seeed rates the XIAO ESP32-S3 at 14 uA in deep sleep. The LIS3DH adds about 4 uA and the sleeping OLED a few more, so the whole keychain should sit at a few tens of microamps.
 - **The camera board costs 3 mA.** With it attached, Seeed rates the deep sleep current at about 3 mA, which would empty a 250 mAh cell in under 4 days. That is why it comes off in [step 2](#2-take-the-camera-board-off-the-xiao).
@@ -314,8 +304,9 @@ These are estimates from datasheets, not measurements.
 Version 2 is still being built, and it has known rough edges. Future versions will attempt to resolve these in some capacity.
 
 - **Untested on hardware.** The firmware compiles, but it has not run on the v2 PCB yet. See [Project Status](#project-status).
-- **The accelerometer is not final.** Shake-to-wake and the dizzy mode need it. Without one, only the button wakes the keychain. The thresholds in `config.h` are starting points and will need tuning on the real keychain.
-- **The USB port disappears in deep sleep.** Wake it with the button before uploading.
+- **The accelerometer is not final.** Shake-to-wake and the dizzy mode need it. Without one, only the buttons wake the keychain. The thresholds in `config.h` are starting points and will need tuning on the real keychain.
+- **No power switch.** Deep sleep is the off state. For storage longer than a few months, disconnect the battery.
+- **The USB port disappears in deep sleep.** Shake it or press a button to wake it before uploading.
 - **The camera board is not used.** If it stays on, it costs about 3 mA in deep sleep, and its microSD slot shares D8, D9, and D10 with the OLED, so the slot cannot be used.
 - **No battery gauge.** The XIAO has no pin connected to the battery voltage, so reading it needs a voltage divider to a free analog pin.
 - **I2C runs at 100 kHz.** That is what the v1 panel needed on perfboard wiring. 400 kHz may work on the PCB, but the eyes would move faster too, since they ease one step per frame.

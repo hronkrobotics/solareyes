@@ -3,11 +3,12 @@
 
 // Pins on the XIAO ESP32-S3, as GPIO numbers. The XIAO's default I2C pins are D4/D5.
 // This build uses D9/D10, so the sketch sets them explicitly. The OLED and the
-// accelerometer share the bus.
-constexpr uint8_t PIN_SDA = 8;        // D9
-constexpr uint8_t PIN_SCL = 9;        // D10
-constexpr uint8_t PIN_BUTTON = 1;     // D0, momentary button to GND
-constexpr uint8_t PIN_ACCEL_INT = 2;  // D1, accelerometer INT1
+// accelerometer share the bus. "Right" and "left" are seen from the front.
+constexpr uint8_t PIN_SDA = 8;          // D9
+constexpr uint8_t PIN_SCL = 9;          // D10
+constexpr uint8_t PIN_BUTTON_NEXT = 1;  // D0, right-hand button to GND: next mood
+constexpr uint8_t PIN_BUTTON_PREV = 4;  // D3, left-hand button to GND: previous mood
+constexpr uint8_t PIN_ACCEL_INT = 2;    // D1, accelerometer INT1, goes low on a shake
 
 constexpr uint8_t OLED_ADDR = 0x3C;
 
@@ -19,13 +20,17 @@ constexpr uint32_t I2C_HZ = 100000;
 // off. 0 keeps it awake.
 constexpr uint32_t SLEEP_AFTER_MS = 60000;
 
-// true: deep sleep once the OLED is off, and wake on the button or movement.
+// true: deep sleep once the OLED is off, and wake on a shake or either button.
 // false: only the OLED turns off. Handy while flashing, because the USB port
 // disappears during deep sleep.
 constexpr bool DEEP_SLEEP = true;
 
+// A button held down longer than this, say pressed against something in a pocket,
+// stops keeping the keychain awake and is left out of the wake-up pins.
+constexpr uint32_t STUCK_BUTTON_MS = 10000;
+
 // Accelerometer thresholds in milli-g, with gravity filtered out.
-constexpr uint16_t WAKE_MG = 250;    // picking up the keys
+constexpr uint16_t WAKE_MG = 250;    // shake to wake
 constexpr uint16_t SHAKE_MG = 1200;  // a hard shake
 
 // Shaking for DIZZY_AFTER_MS makes the eyes dizzy, and they stay dizzy for
