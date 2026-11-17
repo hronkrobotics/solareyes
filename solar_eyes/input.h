@@ -1,7 +1,8 @@
 #pragma once
 #include "config.h"
 
-// The two momentary buttons, each between its pin and GND, using the internal pull-ups.
+// The two momentary buttons. Each signal leg uses the internal pull-up. Both other legs
+// share D6, which is driven low and stands in for ground.
 
 struct Button {
   uint8_t pin;
@@ -21,6 +22,14 @@ void buttonBegin(Button &button, uint32_t now) {
 }
 
 void inputBegin(uint32_t now) {
+  // Pad 6 on the back of the XIAO is the button ground. High drive keeps it near 0 V
+  // with both buttons pressed, and the level is held through System OFF so a press
+  // can still wake the chip.
+  uint32_t ground = g_ADigitalPinMap[PIN_BUTTON_GND];
+  nrf_gpio_cfg(ground, NRF_GPIO_PIN_DIR_OUTPUT, NRF_GPIO_PIN_INPUT_DISCONNECT,
+               NRF_GPIO_PIN_NOPULL, NRF_GPIO_PIN_H0H1, NRF_GPIO_PIN_NOSENSE);
+  nrf_gpio_pin_clear(ground);
+
   buttonBegin(nextButton, now);
   buttonBegin(prevButton, now);
 }

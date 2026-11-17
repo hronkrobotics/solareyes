@@ -243,9 +243,9 @@ void keepBlueOnly() {
   memset(u8g2.getBufferPtr(), 0, 128 * 2);
 }
 
-Pose exprPose() {
+Pose exprPose(Expr e) {
   Pose pose = REST;
-  switch (expr) {
+  switch (e) {
     case Expr::Idle:
       break;
     case Expr::Blink:
@@ -399,6 +399,122 @@ void applyMood(Pose &pose) {
   }
 }
 
+// Each eye bounces around inside the screen when the keychain is shaken, like a weight on
+// a spring: it lags behind the case, springs back, and rebounds off the edges. The two
+// springs differ a little so the eyes do not move in step.
+constexpr float BOUNCE_PUSH = 4000.0f;  // px/s^2 for each g of case acceleration
+constexpr float BOUNCE_X = 14.0f;       // how far an eye can travel sideways
+constexpr float BOUNCE_UP = 9.0f;       // and up, before the yellow rows
+constexpr float BOUNCE_DOWN = 3.0f;     // and down, before the bottom edge
+
+struct Bounce {
+  float x;
+  float y;
+  float vx;
+  float vy;
+  float spring;
+  float damping;
+};
+
+Bounce bounceL = {0, 0, 0, 0, 230.0f, 6.5f};
+Bounce bounceR = {0, 0, 0, 0, 330.0f, 8.0f};
+float pushX = 0;
+float pushY = 0;
+float tiltX = 0;
+float tiltY = 0;
+uint32_t lastPhysics = 0;
+
+// The latest accelerometer reading: the tilt for the gaze, and the case's acceleration
+// in g for the bounce.
+void faceMotion(float tx, float ty, float px, float py) {
+  tiltX = tx;
+  tiltY = ty;
+  pushX = px;
+  pushY = py;
+}
+
+void stepBounce(Bounce &b, float dt) {
+  // Screen y grows downward, so a push toward the top sends the eye down.
+  float ax = -pushX * BOUNCE_PUSH - b.spring * b.x - b.damping * b.vx;
+  float ay = pushY * BOUNCE_PUSH - b.spring * b.y - b.damping * b.vy;
+  b.vx += ax * dt;
+  b.vy += ay * dt;
+  b.x += b.vx * dt;
+  b.y += b.vy * dt;
+  if (fabsf(b.x) > BOUNCE_X) {
+    b.x = b.x > 0 ? BOUNCE_X : -BOUNCE_X;
+    b.vx = -0.6f * b.vx;
+  }
+  if (b.y > BOUNCE_DOWN) {
+    b.y = BOUNCE_DOWN;
+    b.vy = -0.6f * b.vy;
+  } else if (b.y < -BOUNCE_UP) {
+    b.y = -BOUNCE_UP;
+    b.vy = -0.6f * b.vy;
+  }
+}
+
+void stepPhysics(uint32_t now) {
+  float dt = (now - lastPhysics) / 1000.0f;
+  lastPhysics = now;
+  if (dt > 0.05f) {
+    dt = 0.05f;
+  }
+  for (int i = 0; i < 2; i++) {
+    stepBounce(bounceL, dt / 2);
+    stepBounce(bounceR, dt / 2);
+  }
+}
+
+int scaled(float amount, int full) {
+  return (int)lroundf(amount * full);
+}
+
+// Looks the opposite way to the tilt, scaled from the v1 glances: the eye on the side
+// being looked at grows, the other shrinks, and both slide over.
+void applyTilt(Pose &pose) {
+  bool openL = pose.hL > 8;
+  bool openR = pose.hR > 8;
+  if (tiltX != 0) {
+    float s = fabsf(tiltX);
+    bool right = tiltX > 0;
+    pose.dxL += scaled(s, right ? 14 : -8);
+    pose.dxR += scaled(s, right ? 8 : -14);
+    pose.wL += scaled(s, right ? -3 : 2);
+    pose.wR += scaled(s, right ? 2 : -3);
+    if (openL) {
+      pose.hL += scaled(s, right ? -3 : 2);
+    }
+    if (openR) {
+      pose.hR += scaled(s, right ? 2 : -3);
+    }
+  }
+  if (tiltY > 0) {
+    pose.dyL += scaled(tiltY, 5);
+    pose.dyR += scaled(tiltY, 5);
+    if (openL) {
+      pose.hL -= scaled(tiltY, 8);
+    }
+    if (openR) {
+      pose.hR -= scaled(tiltY, 8);
+    }
+    pose.browL += scaled(tiltY, 2);
+    pose.browR += scaled(tiltY, 2);
+  } else if (tiltY < 0) {
+    float s = -tiltY;
+    pose.dyL -= scaled(s, 4);
+    pose.dyR -= scaled(s, 4);
+    if (openL) {
+      pose.hL += scaled(s, 2);
+    }
+    if (openR) {
+      pose.hR += scaled(s, 2);
+    }
+    pose.browL -= scaled(s, 2);
+    pose.browR -= scaled(s, 2);
+  }
+}
+
 Pose targetPose() {
   if (phase == Phase::Shaken) {
     Pose pose = REST;
@@ -412,8 +528,15 @@ Pose targetPose() {
     pose.archR = 6;
     return pose;
   }
-  Pose pose = exprPose();
+  // While tilted, the tilt decides where the eyes look, so random glances are skipped.
+  Expr shownExpr = expr;
+  bool tilted = tiltX != 0 || tiltY != 0;
+  if (tilted && (expr == Expr::LookSide || expr == Expr::LookUp || expr == Expr::LookDown)) {
+    shownExpr = Expr::Idle;
+  }
+  Pose pose = exprPose(shownExpr);
   if (phase == Phase::Awake) {
+    applyTilt(pose);
     applyMood(pose);
   }
   return pose;
@@ -452,12 +575,16 @@ void drawDizzy(uint32_t now) {
   int dx = (int)lroundf(3.0f * cosf(drift));
   int dy = (int)lroundf(2.0f * sinf(drift));
   int tilt = (int)lroundf(3.0f * sinf(now * 0.004f));
+  int xL = LEFT_X + dx + (int)lroundf(bounceL.x);
+  int xR = RIGHT_X - dx + (int)lroundf(bounceR.x);
+  int yL = dy + (int)lroundf(bounceL.y);
+  int yR = -dy + (int)lroundf(bounceR.y);
   u8g2.clearBuffer();
   u8g2.setDrawColor(1);
-  drawBrow(LEFT_X + dx, BROW_Y + dy, 24, 3, tilt, true);
-  drawBrow(RIGHT_X - dx, BROW_Y - dy, 24, 3, -tilt, false);
-  drawSpiral(LEFT_X + dx, EYE_Y + dy, spin, 1);
-  drawSpiral(RIGHT_X - dx, EYE_Y - dy, spin, -1);
+  drawBrow(xL, BROW_Y + yL, 24, 3, tilt, true);
+  drawBrow(xR, BROW_Y + yR, 24, 3, -tilt, false);
+  drawSpiral(xL, EYE_Y + yL, spin, 1);
+  drawSpiral(xR, EYE_Y + yR, spin, -1);
   keepBlueOnly();
 }
 
@@ -486,18 +613,10 @@ void faceDraw(uint32_t now) {
   approach(shown.cheekL, goal.cheekL, 2);
   approach(shown.cheekR, goal.cheekR, 2);
 
-  int bobL = bobAt(now);
-  int bobR = bobAt(now + 80);
-  int shakeXL = 0;
-  int shakeXR = 0;
-  if (phase == Phase::Shaken) {
-    shakeXL = (int)randomBelow(5) - 2;
-    shakeXR = (int)randomBelow(5) - 2;
-    bobL = (int)randomBelow(5) - 2;
-    bobR = (int)randomBelow(5) - 2;
-  }
-  int xL = LEFT_X + shown.dxL + shakeXL;
-  int xR = RIGHT_X + shown.dxR + shakeXR;
+  int bobL = bobAt(now) + (int)lroundf(bounceL.y);
+  int bobR = bobAt(now + 80) + (int)lroundf(bounceR.y);
+  int xL = LEFT_X + shown.dxL + (int)lroundf(bounceL.x);
+  int xR = RIGHT_X + shown.dxR + (int)lroundf(bounceR.x);
   int browYL = BROW_Y + shown.browL + bobL;
   int browYR = BROW_Y + shown.browR + bobR;
   if (browYL < BLUE_TOP) {
@@ -548,11 +667,11 @@ bool faceAsleep() {
 }
 
 // Called with the latest motion reading while awake.
-void faceShake(uint32_t now, bool shaking, uint32_t shakingMs) {
+void faceShake(uint32_t now, bool shaking, bool dizzy) {
   if (!faceAwake()) {
     return;
   }
-  if (shaking && shakingMs >= DIZZY_AFTER_MS) {
+  if (dizzy) {
     if (phase != Phase::Dizzy) {
       Serial.println("dizzy");
     }
@@ -568,7 +687,7 @@ void faceShake(uint32_t now, bool shaking, uint32_t shakingMs) {
 // The eyes get sleepy, then close. faceAsleep() turns true once they are shut.
 void faceDoze(uint32_t now) {
   phase = Phase::Dozing;
-  enterExpr(Expr::Sleepy, now, 1200);
+  enterExpr(Expr::Sleepy, now, 700);
 }
 
 void faceWake(uint32_t now) {
@@ -577,6 +696,7 @@ void faceWake(uint32_t now) {
 }
 
 void faceUpdate(uint32_t now) {
+  stepPhysics(now);
   if (phase == Phase::Dizzy) {
     if ((int32_t)(now - dizzyEnd) >= 0) {
       // Come out of it with the eyes shut and let them ease open.
@@ -591,7 +711,7 @@ void faceUpdate(uint32_t now) {
   }
   if (phase == Phase::Dozing) {
     if (expr == Expr::Sleepy) {
-      enterExpr(Expr::Blink, now, 1500);
+      enterExpr(Expr::Blink, now, 1200);
     } else {
       phase = Phase::Asleep;
     }

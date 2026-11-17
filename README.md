@@ -8,7 +8,7 @@
   </tr>
 </table>
 
-Solar Eyes is a small rechargeable keychain that plays animated eyes on a 0.96" OLED. This is version 2. It charges over USB-C and has no power switch: it falls asleep when it sits still, and a shake wakes it up. Shake it for a few seconds and it gets dizzy. There is no Wi-Fi, app, or account, and Bluetooth stays off.
+Solar Eyes is a small rechargeable keychain that plays animated eyes on a 0.96" OLED. This is version 2. It charges over USB-C and has no power switch: it falls asleep when it sits still, and a shake wakes it up. Shake it for about a second and it gets dizzy. There is no Wi-Fi, app, or account, and Bluetooth stays off.
 
 **Looking for version 1, the one with the solar panel?** It is on the [`v1` branch](https://github.com/hronkrobotics/solareyes/tree/v1). Version 2 dropped the panel and kept the name.
 
@@ -22,7 +22,7 @@ There are no build photos yet. The pictures above are a render of the case and t
 
 ## System Overview
 
-The LiPo connects straight to the XIAO's BAT+ and BAT- pads, and when the keychain is not in use, the XIAO sits in deep sleep. The XIAO charges the battery from USB-C and runs from it the rest of the time. Its 3.3 V pin powers the OLED, which talks to it over I2C on D9 and D10. The buttons are on D0 and D3. The accelerometer is the LSM6DS3TR-C IMU built into the XIAO, and its interrupt line can wake the XIAO from deep sleep, the same as the buttons.
+The LiPo connects straight to the XIAO's BAT+ and BAT- pads, and when the keychain is not in use, the XIAO sits in deep sleep. The XIAO charges the battery from USB-C and runs from it the rest of the time. Its 3.3 V pin powers the OLED, which talks to it over I2C on D9 and D10. The buttons are on D0 and D1, and both of their other legs go to D6. The sketch holds D6 low, so that pad is ground for the buttons. The accelerometer is the LSM6DS3TR-C IMU built into the XIAO, and its interrupt line can wake the XIAO from deep sleep, the same as the buttons.
 
 The firmware is one Arduino sketch, split into a few files. The eyes are the same two rounded rectangles as v1, moved around with `millis()` timing.
 
@@ -31,7 +31,7 @@ flowchart LR
     USB["USB-C"] --> MCU["XIAO nRF52840 Sense<br/>built-in charger and IMU"]
     CELL["3.7 V LiPo"] <-->|"BAT+ and BAT-"| MCU
     MCU -->|"3.3 V, D9 and D10"| OLED["0.96 in OLED"]
-    BTN["Two buttons"] -->|"D0 and D3, wake"| MCU
+    BTN["Two buttons"] -->|"D0 and D1, common on D6, wake"| MCU
 ```
 
 ## Bill of Materials
@@ -118,16 +118,16 @@ flowchart TD
     OLED["0.96 in OLED"]
     NEXT["Right button<br/>next mood"]
     PREV["Left button<br/>previous mood"]
-    GND["GND"]
+    COM["D6, held low"]
 
     CELL -->|"+ to BAT+ pad"| MCU
     CELL -->|"- to BAT- pad"| MCU
     MCU -->|"3V3 to VCC, GND to GND"| OLED
     MCU -->|"D9 to SDA, D10 to SCL"| OLED
     NEXT -->|"D0"| MCU
-    PREV -->|"D3"| MCU
-    NEXT --> GND
-    PREV --> GND
+    PREV -->|"D1"| MCU
+    NEXT --> COM
+    PREV --> COM
 ```
 
 | From | To | Notes |
@@ -135,14 +135,15 @@ flowchart TD
 | XIAO 3V3 / GND | OLED VCC / GND | Display power comes from the XIAO's 3.3 V pin. Go by the labels on the OLED; some modules put VCC first. |
 | XIAO D9 | OLED SDA | I2C data |
 | XIAO D10 | OLED SCL | I2C clock |
-| XIAO D0 | Right-hand button, other leg to GND | Next mood. Uses the internal pull-up, and also wakes the XIAO. |
-| XIAO D3 | Left-hand button, other leg to GND | Previous mood. Uses the internal pull-up, and also wakes the XIAO. |
+| XIAO D0 | Right-hand button | Next mood. The other leg goes to D6. Uses the internal pull-up, and also wakes the XIAO. |
+| XIAO D1 | Left-hand button | Previous mood. The other leg goes to D6. Uses the internal pull-up, and also wakes the XIAO. |
+| XIAO D6 | Both buttons, the shared leg | The sketch drives this pin low, so it takes the place of GND for the buttons. It is on the same edge as D0 and D1. |
 | LiPo + | XIAO BAT+ | |
 | LiPo - | XIAO BAT- | Check the labels on the back of the XIAO. |
 
 The accelerometer needs no wiring. It is built into the XIAO, on its own internal I2C bus.
 
-**Why these pins.** D9 and D10 are not the XIAO's default I2C pins (D4 and D5), so the sketch sets them explicitly. They sit right next to 3V3 and GND on the edge of the XIAO, which keeps the OLED's four connections short. Any nRF52840 pin can wake it from deep sleep, so D0 and D3 are just free pins on the other side.
+**Why these pins.** D9 and D10 are not the XIAO's default I2C pins (D4 and D5), so the sketch sets them explicitly. They sit right next to 3V3 and GND on the edge of the XIAO, which keeps the OLED's four connections short. Any nRF52840 pin can wake it from deep sleep, so D0 and D1 are just free pins on the other side. D6 is on that same edge, and the sketch holds it low so the button grounds can land there too.
 
 ## Assembly
 
@@ -185,7 +186,7 @@ Fit the PCB and the battery into the outer wall, with the USB-C port in its open
 
 ### 8. Shake it awake
 
-After a minute with no movement, the eyes close and it goes to sleep. Give it a shake to wake it up, then clip it onto your keys.
+After five seconds with no movement, the eyes close and it goes to sleep. Give it a shake to wake it up, then clip it onto your keys.
 
 ```mermaid
 flowchart TD
@@ -225,7 +226,7 @@ Open `solar_eyes/solar_eyes.ino` in the Arduino IDE with these settings:
 
 The IDE resets the XIAO into its bootloader for each upload, and the port number changes along the way. If an upload cannot find the board, double-tap the XIAO's reset button to start the bootloader by hand, then upload again.
 
-When a serial monitor connects, the sketch prints a short report: the I2C devices on D9 and D10, whether the OLED and the accelerometer answered, what woke it, the mood, and whether it is on USB or battery power.
+When a serial monitor connects, the sketch prints a short report: the I2C devices on D9 and D10, whether the OLED and the accelerometer answered, what woke it, the mood, and whether it is on USB or battery power. Send `a` to stream the accelerometer.
 
 ### The eyes
 
@@ -234,6 +235,8 @@ Each eye is a filled rounded rectangle with no pupil. The eye looks around by ch
 The top 16 rows of this panel are yellow glass. The sketch keeps those rows dark, so only blue pixels light up.
 
 The right-hand button steps to the next mood and the left-hand button to the previous one. Each mood changes the resting look and which expressions come up. The mood is saved to the XIAO's flash each time it goes to sleep, so it comes back the same way even after the battery is unplugged.
+
+Tilting the keychain makes the eyes look the other way. Tip it back and they look down. Tip it left and they look right. A small tilt does nothing, and by about 40 degrees they look all the way over.
 
 | Mood | Look |
 |---|---|
@@ -245,11 +248,11 @@ The right-hand button steps to the next mood and the left-hand button to the pre
 
 ### Shake and dizzy
 
-A hard knock makes the eyes go wide and jitter. Keep shaking it for about 3 seconds and they turn into spinning spirals. They stay dizzy for 4 seconds after the shaking stops, then blink back to the current mood. `SHAKE_MG`, `DIZZY_AFTER_MS`, and `DIZZY_FOR_MS` in `config.h` set how hard and how long.
+Shaking makes the eyes go wide and bounce. About a second of solid shaking turns them into spinning spirals. Short pauses do not start that count over. They stay dizzy for 3 seconds after the shaking stops, then blink back to the current mood. `SHAKE_MG`, `DIZZY_SHAKE_MS`, and `DIZZY_FOR_MS` in `config.h` set how hard and how long.
 
 ### Sleep and shake to wake
 
-There is no power switch, so deep sleep is how the keychain turns off. After 60 seconds with no button press and no movement (`SLEEP_AFTER_MS`), the eyes get sleepy and close, and the OLED turns off. On battery, the nRF52840 then goes into System OFF, its deepest sleep. A shake wakes it, through the accelerometer's interrupt line, and so does either button. It wakes up with its eyes opening. If the accelerometer does not answer at startup, only the buttons wake it.
+There is no power switch, so deep sleep is how the keychain turns off. After 5 seconds with no button press, no movement, and no change in tilt (`SLEEP_AFTER_MS`), the eyes get sleepy and close, and the OLED turns off. On battery, the nRF52840 then goes into System OFF, its deepest sleep. A shake wakes it, through the accelerometer's interrupt line, and so does either button. It wakes up with its eyes opening. If the accelerometer does not answer at startup, only the buttons wake it.
 
 Plugged into USB, it only turns the screen off and stays running, so the serial port stays up and a shake brings the eyes straight back.
 
@@ -257,11 +260,11 @@ On a key ring, something in a pocket can hold a button down. A button held for m
 
 ```mermaid
 flowchart LR
-    A["Awake, in the current mood"] -->|"hard knock"| W["Eyes wide"]
-    W -->|"still shaking after 3 s"| D["Dizzy spirals"]
+    A["Awake, in the current mood"] -->|"shaking"| W["Eyes wide, bouncing"]
+    W -->|"about 1 s of shaking"| D["Dizzy spirals"]
     W -->|"shaking stops"| A
-    D -->|"4 s after the shaking stops"| A
-    A -->|"60 s with no button or movement"| Z["Eyes close, OLED off"]
+    D -->|"3 s after the shaking stops"| A
+    A -->|"5 s still"| Z["Eyes close, OLED off"]
     Z -->|"on battery"| S["System OFF"]
     S -->|"shake or either button"| A
 ```
@@ -275,7 +278,7 @@ The XIAO nRF52840 Sense has an LSM6DS3TR-C IMU built in, so v2 needs no separate
 `motion.h` uses two parts of the chip. The gyroscope stays off.
 
 - Its wake-up interrupt watches high-pass filtered data, so gravity and slow tilting are ignored. Past `WAKE_MG` it drives its interrupt line high. That line wakes the XIAO from System OFF, and any movement while awake restarts the sleep timer.
-- The chip has one motion threshold, so hard shakes are spotted in software: the reading jumps by more than `SHAKE_MG` between polls.
+- Each reading is split into gravity, which gives the tilt, and the leftover. The leftover fills a shake meter when it passes `SHAKE_MG`.
 
 At 26 Hz in low-power mode, the accelerometer draws about 14 uA, by ST's figures. Switching to a different accelerometer only means rewriting `motion.h`.
 

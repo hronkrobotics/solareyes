@@ -1,8 +1,9 @@
 // Solar Eyes v2
 // Animated eyes on a 0.96" SSD1306 OLED, run by a Seeed XIAO nRF52840 Sense from a LiPo.
-// Right button: next mood. Left button: previous mood. Shake it for about 3 seconds:
-// it gets dizzy. With no button and no movement for SLEEP_AFTER_MS, the eyes close and
-// it goes to sleep. A shake wakes it again, and so does either button.
+// Right button: next mood. Left button: previous mood. Tilting it makes the eyes look the
+// other way. Shaking bounces them around, and about a second of it makes them dizzy.
+// With no button, movement, or tilt for SLEEP_AFTER_MS, the eyes close and it goes to
+// sleep. A shake wakes it again, and so does either button.
 
 #include <Adafruit_TinyUSB.h>
 #include <Wire.h>
@@ -16,6 +17,8 @@
 uint32_t nextFrame = 0;
 uint32_t nextMotionPoll = 0;
 bool serialWasOpen = false;
+bool streamMotion = false;
+uint32_t nextStream = 0;
 
 // Seeds random() from the nRF52840's hardware random number generator.
 uint32_t hardwareSeed() {
@@ -49,6 +52,15 @@ void report() {
   Serial.println(imuFound ? "IMU found (LSM6DS3TR-C)" : "IMU not found, button wake only");
   Serial.printf("woke by: %s, mood: %s, power: %s\n", wakeReason(),
                 MOOD_NAMES[(uint8_t)mood], usbPowered() ? "USB" : "battery");
+  Serial.println("send 'a' to stream the accelerometer");
+}
+
+// Five lines a second: the IMU's own axes, then gravity as the screen sees it, and the
+// shake meter. All in milli-g, except the meter, which reaches 20 when dizzy.
+void printMotion() {
+  Serial.printf("imu x %5ld y %5ld z %5ld | right %5d top %5d front %5d | shake %d\n",
+                (long)imuMg[0], (long)imuMg[1], (long)imuMg[2], (int)gravity[0],
+                (int)gravity[1], (int)gravity[2], (int)shakeLevel);
 }
 
 void wake(uint32_t now) {
@@ -100,6 +112,15 @@ void loop() {
     report();
   }
   serialWasOpen = serialOpen;
+  while (Serial.available()) {
+    if (Serial.read() == 'a') {
+      streamMotion = !streamMotion;
+    }
+  }
+  if (streamMotion && serialOpen && (int32_t)(now - nextStream) >= 0) {
+    nextStream = now + 200;
+    printMotion();
+  }
 
   bool next = buttonPressed(nextButton, now);
   bool prev = buttonPressed(prevButton, now);
@@ -123,7 +144,8 @@ void loop() {
       }
       noteActivity(now);
     }
-    faceShake(now, motion.shaking, motion.shakingMs);
+    faceMotion(motion.tiltX, motion.tiltY, motion.pushX, motion.pushY);
+    faceShake(now, motion.shaking, motion.dizzy);
   }
 
   if (faceAwake() && idleTooLong(now)) {

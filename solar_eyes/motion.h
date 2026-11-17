@@ -8,15 +8,19 @@
 // - Its wake-up interrupt watches high-pass filtered data, so gravity and slow tilting
 //   are ignored. Past WAKE_MG it drives INT1 high and holds it there until WAKE_UP_SRC is
 //   read. That pin wakes the board, and while awake any movement counts as activity.
-// - This chip has one motion threshold, so hard shakes are spotted in software: the
-//   reading jumps by more than SHAKE_MG between polls.
+// - In software, each reading is split into gravity (a smoothed average), which gives the
+//   tilt, and what is left over, which is the case being moved or shaken.
 // The gyroscope stays off. If the IMU does not answer, motion is skipped and only the
 // buttons wake the board. To use a different accelerometer, only this file has to change.
 
 struct Motion {
-  bool moved;          // above WAKE_MG since the last update
-  bool shaking;        // hard shakes with no pause longer than SHAKE_GAP_MS
-  uint32_t shakingMs;  // how long the current shake has lasted
+  bool moved;    // a bump past WAKE_MG, or the tilt changed
+  bool shaking;  // shaken within the last 300 ms
+  bool dizzy;    // shaken enough to get dizzy
+  float tiltX;   // -1 to 1, positive when tilted left, so the eyes look right
+  float tiltY;   // -1 to 1, positive when tilted back, so the eyes look down
+  float pushX;   // the case's acceleration in g, toward the screen's right
+  float pushY;   // and toward the top of the screen
 };
 
 namespace lsm6ds3 {
@@ -38,13 +42,13 @@ constexpr uint8_t WU_IA = 0x08;  // wake-up event bit in WAKE_UP_SRC
 }  // namespace lsm6ds3
 
 bool imuFound = false;
-bool havePrev = false;
-int32_t prevX = 0;
-int32_t prevY = 0;
-int32_t prevZ = 0;
-bool shaking = false;
-uint32_t shakeStart = 0;
-uint32_t lastShake = 0;
+int32_t imuMg[3] = {0, 0, 0};  // the last reading on the IMU's own X, Y, Z
+float gravity[3] = {0, 0, 0};  // smoothed, toward the screen's right, top, and front
+bool haveGravity = false;
+float tiltRef[3] = {0, 0, 0};  // the direction of gravity at the last tilt change
+float shakeLevel = 0;
+bool shakenOnce = false;
+uint32_t lastShakeAt = 0;
 
 bool imuWrite(uint8_t reg, uint8_t value) {
   Wire1.beginTransmission(lsm6ds3::ADDR);
@@ -117,8 +121,25 @@ bool motionBegin() {
   return true;
 }
 
+float screenAxis(int8_t pick) {
+  float value = imuMg[abs(pick) - 1];
+  return pick < 0 ? -value : value;
+}
+
+// Turns one component of gravity (-1 to 1) into how far the eyes look that way.
+float tiltAmount(float component) {
+  float amount = (fabsf(component) - TILT_DEADZONE) / (TILT_FULL - TILT_DEADZONE);
+  if (amount <= 0) {
+    return 0;
+  }
+  if (amount > 1) {
+    amount = 1;
+  }
+  return component < 0 ? -amount : amount;
+}
+
 Motion motionUpdate(uint32_t now) {
-  Motion motion = {false, false, 0};
+  Motion motion = {false, false, false, 0, 0, 0, 0};
   if (!imuFound) {
     return motion;
   }
@@ -126,34 +147,53 @@ Motion motionUpdate(uint32_t now) {
   motion.moved = src >= 0 && (src & lsm6ds3::WU_IA);
 
   uint8_t raw[6];
-  if (imuRead(lsm6ds3::OUTX_L_XL, raw, sizeof(raw))) {
+  if (!imuRead(lsm6ds3::OUTX_L_XL, raw, sizeof(raw))) {
+    return motion;
+  }
+  for (int i = 0; i < 3; i++) {
     // 0.122 mg per count at +-4 g.
-    int32_t x = (int16_t)(raw[0] | raw[1] << 8) * 122 / 1000;
-    int32_t y = (int16_t)(raw[2] | raw[3] << 8) * 122 / 1000;
-    int32_t z = (int16_t)(raw[4] | raw[5] << 8) * 122 / 1000;
-    if (havePrev) {
-      int32_t dx = x - prevX;
-      int32_t dy = y - prevY;
-      int32_t dz = z - prevZ;
-      int32_t limit = (int32_t)SHAKE_MG * SHAKE_MG;
-      if (dx * dx + dy * dy + dz * dz > limit) {
-        if (!shaking) {
-          shaking = true;
-          shakeStart = now;
-        }
-        lastShake = now;
-      } else if (shaking && now - lastShake > SHAKE_GAP_MS) {
-        shaking = false;
+    imuMg[i] = (int16_t)(raw[2 * i] | raw[2 * i + 1] << 8) * 122 / 1000;
+  }
+  float reading[3] = {screenAxis(SCREEN_RIGHT), screenAxis(SCREEN_UP), screenAxis(SCREEN_OUT)};
+  float moving[3];
+  for (int i = 0; i < 3; i++) {
+    if (!haveGravity) {
+      gravity[i] = reading[i];
+    }
+    gravity[i] += (reading[i] - gravity[i]) * 0.2f;
+    moving[i] = reading[i] - gravity[i];
+  }
+  haveGravity = true;
+  motion.pushX = moving[0] / 1000.0f;
+  motion.pushY = moving[1] / 1000.0f;
+
+  // Shaking fills the meter one step per reading and pauses drain it at half that.
+  float jolt = sqrtf(moving[0] * moving[0] + moving[1] * moving[1] + moving[2] * moving[2]);
+  float full = (float)DIZZY_SHAKE_MS / MOTION_POLL_MS;
+  if (jolt > SHAKE_MG) {
+    shakeLevel = fminf(shakeLevel + 1, full + 4);
+    shakenOnce = true;
+    lastShakeAt = now;
+  } else {
+    shakeLevel = fmaxf(shakeLevel - 0.5f, 0);
+  }
+  motion.shaking = shakenOnce && now - lastShakeAt < 300;
+  motion.dizzy = shakeLevel >= full;
+
+  float size = sqrtf(gravity[0] * gravity[0] + gravity[1] * gravity[1] + gravity[2] * gravity[2]);
+  if (size > 300) {
+    float dir[3] = {gravity[0] / size, gravity[1] / size, gravity[2] / size};
+    motion.tiltX = tiltAmount(dir[0]);
+    motion.tiltY = tiltAmount(dir[2]);
+    // Tilting by more than about 12 degrees counts as activity, so playing with the
+    // gaze keeps it awake. Slow tilts never set off the wake-up interrupt.
+    if (dir[0] * tiltRef[0] + dir[1] * tiltRef[1] + dir[2] * tiltRef[2] < 0.978f) {
+      motion.moved = true;
+      for (int i = 0; i < 3; i++) {
+        tiltRef[i] = dir[i];
       }
     }
-    prevX = x;
-    prevY = y;
-    prevZ = z;
-    havePrev = true;
   }
-
-  motion.shaking = shaking;
-  motion.shakingMs = shaking ? now - shakeStart : 0;
   return motion;
 }
 
